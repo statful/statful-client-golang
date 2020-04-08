@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"github.com/statful/client-golang"
+	"github.com/statful/statful-client-golang"
 	"log"
 	"net/http"
 )

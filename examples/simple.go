@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/statful/client-golang"
+	"github.com/statful/statful-client-golang"
 	"net/http"
 )
 
