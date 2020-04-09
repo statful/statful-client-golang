@@ -1,6 +1,6 @@
 package statful
 
 type MetricsSender interface {
-	Put(metric *Metric) error
+	Put(metric []*Metric) error
 	Flush()
 }

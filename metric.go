@@ -7,11 +7,12 @@ import (
 )
 
 type Metric struct {
-	Name string
-	Value float64
-	Tags Tags
-	Aggs Aggregations
-	Freq AggregationFrequency
+	Name      string
+	Value     float64
+	Timestamp int64
+	Tags      Tags
+	Aggs      Aggregations
+	Freq      AggregationFrequency
 }
 
 // metric[,tag1=value][,tag2=value] value unix_timestamp [aggregation1][,aggregation2][,aggregation_frequency]

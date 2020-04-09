@@ -14,12 +14,14 @@ type BufferedMetricsSender struct {
 	Client    Client
 }
 
-func (bms *BufferedMetricsSender) Put(m *Metric) error {
+func (bms *BufferedMetricsSender) Put(metrics []*Metric) error {
 	bms.mu.Lock()
 	defer bms.mu.Unlock()
 
 	// put the metric in the buffer
-	bms.Buf.ReadFrom(strings.NewReader(m.String()))
+	for _, m := range metrics {
+		bms.Buf.ReadFrom(strings.NewReader(m.String()))
+	}
 
 	if bms.Buf.Len() >= bms.FlushSize {
 		bms.Client.Send(&bms.Buf)
