@@ -3,7 +3,6 @@ package statful
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 type Metric struct {
@@ -26,7 +25,7 @@ func (m *Metric) String() string {
 		fmt.Fprintf(&b, ",%v=%v", tk, tv)
 	}
 	// value and timestamp
-	fmt.Fprintf(&b, " %f %d", m.Value, time.Now().Unix())
+	fmt.Fprintf(&b, " %f %d", m.Value, m.Timestamp)
 	// aggregations
 	if len(m.Aggs) > 0 {
 		fmt.Fprintf(&b, " ")

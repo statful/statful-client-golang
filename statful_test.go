@@ -2,12 +2,61 @@ package statful
 
 import (
 	"bytes"
+	"context"
+	"log"
+	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 )
+
+func ExampleSimple() {
+	metrics := Statful{
+		Sender: &ProxyMetricsSender{
+			Client: &WriterClient{
+				Writer: os.Stdout,
+			},
+		},
+		GlobalTags: Tags{"client": "golang"},
+	}
+
+	SetDebugLogger(log.Println)
+	SetErrorLogger(log.Println)
+
+	metrics.Put("test.demo.metric", 100, Tags{}, 0, Aggregations{}, Freq10s)
+	// Output: test.demo.metric,client=golang 100.000000 0
+}
+
+func ExampleHttpServer() {
+	metrics := Statful{
+		Sender: &BufferedMetricsSender{
+			Client: &ApiClient{
+				Http:  &http.Client{},
+				Url:   "https://api.statful.com",
+				Token: "12345678-90ab-cdef-1234-567890abcdef",
+			},
+			FlushSize: 1000,
+			Buf:       bytes.Buffer{},
+		},
+		GlobalTags: Tags{"client": "golang"},
+	}
+	SetDebugLogger(log.Println)
+	SetErrorLogger(log.Println)
+	cancelFlushInterval := metrics.StartFlushInterval(10 * time.Second)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		metrics.Counter("http_requests_total", 1, Tags{"status_code": "200", "uri": r.URL.String()})
+		w.WriteHeader(http.StatusOK)
+	})
+
+	srv := &http.Server{Addr: ":8080"}
+
+	srv.Shutdown(context.TODO())
+	cancelFlushInterval()
+}
 
 func TestStatfulSDK(t *testing.T) {
 	metricsData := make(chan []byte, 1)
@@ -180,7 +229,7 @@ func TestStatfulSDK(t *testing.T) {
 			metricsProducer: func(s *Statful) {
 				s.Histogram("potatoes", 1, Tags{})
 				s.Histogram("turnips", 10, Tags{"foo": "bar"})
-				s.Histogram("carrots", 100, Tags{"foo": "bar", "global":"tag"})
+				s.Histogram("carrots", 100, Tags{"foo": "bar", "global": "tag"})
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -220,7 +269,7 @@ func TestStatfulSDK(t *testing.T) {
 			metricsProducer: func(s *Statful) {
 				s.Put("potatoes", 1, Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
 				s.Put("turnips", 10, Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
-				s.Put("carrots", 100, Tags{"foo": "bar", "global":"tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Put("carrots", 100, Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -236,7 +285,7 @@ func TestStatfulSDK(t *testing.T) {
 			metricsProducer: func(s *Statful) {
 				s.Put("potatoes", 1, Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
 				s.Put("turnips", 10, Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
-				s.Put("carrots", 100, Tags{"foo": "bar", "global":"tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Put("carrots", 100, Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,

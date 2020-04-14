@@ -16,9 +16,7 @@ var (
 
 type Statful struct {
 	Sender MetricsSender
-
 	GlobalTags Tags
-	DryRun     bool
 }
 
 // Starts a go routine that periodically flushes the metrics of MetricsSender

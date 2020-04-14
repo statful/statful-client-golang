@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	ep_metrics            = "/metrics"
-	ep_metrics_aggregated = "/aggregation/{agg}/frequency/{freq}"
+	ep_metrics            = "/tel/v2.0/metrics"
+	ep_metrics_aggregated = "/tel/v2.0/aggregation/{agg}/frequency/{freq}"
 )
 
 type ApiClient struct {
