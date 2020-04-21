@@ -57,7 +57,7 @@ func (a *ApiClient) Send(data io.Reader) error {
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		debugLog("sent metrics")
+		debugLog("sent metrics:", string(body))
 	} else {
 		return errors.New(fmt.Sprintf("Http request failed with %v %v", resp.StatusCode, string(body)))
 	}
