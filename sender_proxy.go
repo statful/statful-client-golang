@@ -13,8 +13,7 @@ func (p *ProxyMetricsSender) Put(metrics []*Metric) error {
 	for _, m := range metrics {
 		b.WriteString(m.String())
 	}
-	p.Client.Send(strings.NewReader(b.String()))
-	return nil
+	return p.Client.Send(strings.NewReader(b.String()))
 }
 
 func (p *ProxyMetricsSender) Flush() {

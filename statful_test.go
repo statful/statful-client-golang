@@ -3,9 +3,11 @@ package statful
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -16,15 +18,17 @@ import (
 func ExampleSimple() {
 	metrics := Statful{
 		Sender: &ProxyMetricsSender{
-			Client: &WriterClient{
-				Writer: os.Stdout,
-			},
+			Client: FuncClient(func(data io.Reader) error {
+				if all, err := ioutil.ReadAll(data); err != nil {
+					fmt.Printf("failed to read data: %v", err)
+				} else {
+					fmt.Printf(string(all))
+				}
+				return nil
+			}),
 		},
 		GlobalTags: Tags{"client": "golang"},
 	}
-
-	SetDebugLogger(log.Println)
-	SetErrorLogger(log.Println)
 
 	metrics.Put("test.demo.metric", 100, Tags{}, 0, Aggregations{}, Freq10s)
 	// Output: test.demo.metric,client=golang 100.000000 0
