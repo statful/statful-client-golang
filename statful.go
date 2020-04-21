@@ -64,7 +64,7 @@ func (s *Statful) Histogram(name string, value float64, tags Tags) {
 
 // Sends metric m using the MetricsSender.
 func (s *Statful) Put(name string, value float64, tags Tags, timestamp int64, aggs Aggregations, freq AggregationFrequency) error {
-	s.Sender.Put([]*Metric{
+	return s.Sender.Put([]*Metric{
 		{
 			Name:  name,
 			Value: value,
@@ -74,6 +74,4 @@ func (s *Statful) Put(name string, value float64, tags Tags, timestamp int64, ag
 			Freq:  freq,
 		},
 	})
-
-	return nil
 }
