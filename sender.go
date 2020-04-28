@@ -24,7 +24,7 @@ const (
 	ep_metrics_aggregated = "/tel/v2.0/aggregation/:agg/frequency/:freq"
 )
 
-type HttpClient struct {
+type HttpSender struct {
 	Http          *http.Client
 	Url           string
 	BasePath      string
@@ -32,13 +32,13 @@ type HttpClient struct {
 	NoCompression bool
 }
 
-func (h *HttpClient) Send(data io.Reader) error {
+func (h *HttpSender) Send(data io.Reader) error {
 	p := h.Url + h.BasePath + ep_metrics
 
 	return h.do(http.MethodPut, p, data)
 }
 
-func (h *HttpClient) SendAggregated(data io.Reader, agg Aggregation, freq AggregationFrequency) error {
+func (h *HttpSender) SendAggregated(data io.Reader, agg Aggregation, freq AggregationFrequency) error {
 	p := h.Url + h.BasePath + ep_metrics_aggregated
 	p = strings.Replace(p, ":agg", string(agg), -1)
 	p = strings.Replace(p, ":freq", strconv.Itoa(int(freq)), -1)
@@ -46,7 +46,7 @@ func (h *HttpClient) SendAggregated(data io.Reader, agg Aggregation, freq Aggreg
 	return h.do(http.MethodPut, p, data)
 }
 
-func (h *HttpClient) do(method string, url string, data io.Reader) error {
+func (h *HttpSender) do(method string, url string, data io.Reader) error {
 	headers := http.Header{}
 
 	if !h.NoCompression {
@@ -58,7 +58,7 @@ func (h *HttpClient) do(method string, url string, data io.Reader) error {
 		headers.Set("Content-Encoding", "gzip")
 	}
 
-	headers.Set("M-API-Token", h.Token)
+	headers.Set("M-API	-Token", h.Token)
 	headers.Set("Content-Type", "text/plain")
 
 	req, err := http.NewRequest(method, url, data)
@@ -105,12 +105,12 @@ func gzipData(reader io.Reader) (io.Reader, error) {
 	return bytes.NewReader(buf.Bytes()), nil
 }
 
-type UdpClient struct {
+type UdpSender struct {
 	Address string
 	Timeout time.Duration
 }
 
-func (u *UdpClient) Put(reader io.Reader) error {
+func (u *UdpSender) Put(reader io.Reader) error {
 	conn, err := net.Dial("udp", u.Address)
 	if err != nil {
 		return err
@@ -125,6 +125,6 @@ func (u *UdpClient) Put(reader io.Reader) error {
 	return nil
 }
 
-func (u *UdpClient) PutAggregated(reader io.Reader) error {
+func (u *UdpSender) PutAggregated(reader io.Reader) error {
 	return errors.New("UNSUPPORTED_OPERATION")
 }

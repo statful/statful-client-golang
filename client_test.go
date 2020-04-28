@@ -60,7 +60,7 @@ func ExampleHttpServer() {
 		FlushSize:     50,
 		FlushInterval: 10 * time.Second,
 		Logger:        log.New(os.Stderr, "", log.LstdFlags),
-		Sender: &HttpClient{
+		Sender: &HttpSender{
 			Http:  &http.Client{},
 			Url:   "https://api.Sender.com",
 			Token: "12345678-90ab-cdef-1234-567890abcdef",

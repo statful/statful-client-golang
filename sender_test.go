@@ -80,7 +80,7 @@ func TestApiClient_PutMetrics_Success(t *testing.T) {
 		metrics      []string
 	}{
 		{
-			description: "HttpClient send single metric",
+			description: "HttpSender send single metric",
 			url:         apiUrl,
 			basePath:    apiBasePath,
 			apiToken:    apiToken,
@@ -89,7 +89,7 @@ func TestApiClient_PutMetrics_Success(t *testing.T) {
 			},
 			roundTripper: successFullRoundTripper,
 		}, {
-			description: "HttpClient send multiple metrics",
+			description: "HttpSender send multiple metrics",
 			url:         apiUrl,
 			basePath:    apiBasePath,
 			apiToken:    apiToken,
@@ -110,7 +110,7 @@ func TestApiClient_PutMetrics_Success(t *testing.T) {
 	}
 
 	for _, s := range scenarios {
-		api := HttpClient{
+		api := HttpSender{
 			Url:      s.url,
 			BasePath: s.basePath,
 			Token: s.apiToken,
@@ -125,7 +125,7 @@ func TestApiClient_PutMetrics_Success(t *testing.T) {
 			t.Errorf("Failed to put metrics: %v", err)
 		}
 
-		api = HttpClient{
+		api = HttpSender{
 			Url:           s.url,
 			BasePath:      s.basePath,
 			Token:      s.apiToken,
@@ -197,12 +197,12 @@ func TestUdpClient_PutMetrics(t *testing.T) {
 		metrics     []string
 	}{
 		{
-			description: "UdpClient send single metric",
+			description: "UdpSender send single metric",
 			metrics: []string{
 				"test.demo.metric,Sender=golang,env=test 100 1585161000",
 			},
 		}, {
-			description: "UdpClient send multiple metrics",
+			description: "UdpSender send multiple metrics",
 			metrics: []string{
 				"test.demo.metric 50 1585161006",
 				"test.demo.metric,Sender=golang,env=test 100 1585161000",
@@ -220,7 +220,7 @@ func TestUdpClient_PutMetrics(t *testing.T) {
 
 	for _, s := range scenarios {
 		t.Run(s.description, func(t *testing.T) {
-			udp := UdpClient{
+			udp := UdpSender{
 				Address: udpAddr,
 				Timeout: 2 * time.Second,
 			}
