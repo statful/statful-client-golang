@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -15,41 +16,56 @@ import (
 	"time"
 )
 
-func ExampleSimple() {
-	metrics := Statful{
-		Sender: &ProxyMetricsSender{
-			Client: FuncClient(func(data io.Reader) error {
-				if all, err := ioutil.ReadAll(data); err != nil {
-					fmt.Printf("failed to read data: %v", err)
-				} else {
-					fmt.Printf(string(all))
-				}
-				return nil
-			}),
-		},
-		GlobalTags: Tags{"client": "golang"},
+type funcClient func(...interface{}) error
+
+func (f funcClient) Send(data io.Reader) error {
+	if all, err := ioutil.ReadAll(data); err != nil {
+		return err
+	} else {
+		return f(string(all))
 	}
+}
+
+func (f funcClient) SendAggregated(data io.Reader, agg Aggregation, frequency AggregationFrequency) error {
+	if all, err := ioutil.ReadAll(data); err != nil {
+		return err
+	} else {
+		return f(string(all), agg, frequency)
+	}
+}
+
+type fmtLogger func(...interface{}) (int, error)
+
+func (f fmtLogger) Println(v ...interface{}) {
+	f(v...)
+}
+
+func ExampleSimple() {
+	metrics := New(Options{
+		FlushSize: 10,
+		Logger: fmtLogger(fmt.Println),
+		Tags:   Tags{"client": "golang"},
+		DryRun: true,
+	})
 
 	metrics.Put("test.demo.metric", 100, Tags{}, 0, Aggregations{}, Freq10s)
-	// Output: test.demo.metric,client=golang 100.000000 0
+	metrics.Flush()
+	// Output: Dry metric: test.demo.metric,client=golang 100.000000 0
 }
 
 func ExampleHttpServer() {
-	metrics := Statful{
-		Sender: &BufferedMetricsSender{
-			Client: &ApiClient{
-				Http:  &http.Client{},
-				Url:   "https://api.statful.com",
-				Token: "12345678-90ab-cdef-1234-567890abcdef",
-			},
-			FlushSize: 1000,
-			Buf:       bytes.Buffer{},
+	metrics := New(Options{
+		DryRun:        false,
+		Tags:          Tags{"client": "golang"},
+		FlushSize:     50,
+		FlushInterval: 10 * time.Second,
+		Logger:        log.New(os.Stderr, "", log.LstdFlags),
+		Client: &ApiClient{
+			Http:  &http.Client{},
+			Url:   "https://api.statful.com",
+			Token: "12345678-90ab-cdef-1234-567890abcdef",
 		},
-		GlobalTags: Tags{"client": "golang"},
-	}
-	SetDebugLogger(log.Println)
-	SetErrorLogger(log.Println)
-	cancelFlushInterval := metrics.StartFlushInterval(10 * time.Second)
+	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		metrics.Counter("http_requests_total", 1, Tags{"status_code": "200", "uri": r.URL.String()})
@@ -59,41 +75,56 @@ func ExampleHttpServer() {
 	srv := &http.Server{Addr: ":8080"}
 
 	srv.Shutdown(context.TODO())
-	cancelFlushInterval()
+	metrics.StopFlushInterval()
+}
+
+type ChannelClient struct {
+	data chan<- []byte
+}
+
+func (c *ChannelClient) Put(data io.Reader) error {
+	all, err := ioutil.ReadAll(data)
+	if err != nil {
+		return err
+	}
+	c.data <- all
+	return nil
+}
+
+func (c *ChannelClient) PutAggregated(data io.Reader, agg Aggregation, freq AggregationFrequency) error {
+	all, err := ioutil.ReadAll(data)
+	if err != nil {
+		return err
+	}
+	c.data <- all
+	return nil
 }
 
 func TestStatfulSDK(t *testing.T) {
 	metricsData := make(chan []byte, 1)
 
-	statfulWithoutGlobalTags := Statful{
-		Sender: &BufferedMetricsSender{
-			FlushSize: 1000,
-			Buf:       bytes.Buffer{},
-			Client: &ChannelClient{
-				data: metricsData,
-			},
+	statfulWithoutGlobalTags := New(Options{
+		FlushSize:     10,
+		Logger:        log.New(os.Stderr, "", log.LstdFlags),
+		Client: &ChannelClient{
+			data: metricsData,
 		},
-		GlobalTags: Tags{},
-	}
-	statfulWithGlobalTags := Statful{
-		Sender: &BufferedMetricsSender{
-			FlushSize: 1000,
-			Buf:       bytes.Buffer{},
-			Client: &ChannelClient{
-				data: metricsData,
-			},
-		},
-		GlobalTags: Tags{"global": "tag"},
-	}
-	//cancelPeriodicFlush := statfulMetrics.StartFlushInterval(1 * time.Second)
+	})
 
-	SetDebugLogger(t.Log)
-	SetErrorLogger(t.Log)
+	statfulWithGlobalTags := New(Options{
+		FlushSize:     10,
+		Logger:        log.New(os.Stderr, "", log.LstdFlags),
+		Client: &ChannelClient{
+			data: metricsData,
+		},
+		Tags: Tags{"global": "tag"},
+	})
+	//cancelPeriodicFlush := statfulMetrics.StartFlushInterval(1 * time.Second)
 
 	scenarios := []struct {
 		description      string
-		statful          Statful
-		metricsProducer  func(s *Statful)
+		statful          *statful
+		metricsProducer  func(s *statful)
 		totalFlushes     int
 		totalMetricsSent int
 		metricsSent      []*regexp.Regexp
@@ -102,10 +133,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "3 Counters with tags",
 			statful:     statfulWithoutGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				s.Counter("potatoes", 2, Tags{})
 				s.Counter("potatoes", 20, Tags{"foo": "bar"})
 				s.Counter("potatoes", 200, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -118,10 +150,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "3 counters with global tags",
 			statful:     statfulWithGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				s.Counter("potatoes", 2, Tags{})
 				s.Counter("potatoes", 20, Tags{"foo": "bar"})
 				s.Counter("potatoes", 200, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -134,11 +167,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "concurrent counters",
 			statful:     statfulWithoutGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				wg := sync.WaitGroup{}
 				for i := 0; i < 10; i++ {
 					wg.Add(1)
-					go func(metrics *Statful, workerId string, wg *sync.WaitGroup) {
+					go func(metrics *statful, workerId string, wg *sync.WaitGroup) {
 						for i := 0; i < 20; i++ {
 							metrics.Counter("potatoes", float64(1), Tags{"worker": workerId})
 						}
@@ -147,8 +180,9 @@ func TestStatfulSDK(t *testing.T) {
 				}
 
 				wg.Wait()
+				s.Flush()
 			},
-			totalFlushes:     10,
+			totalFlushes:     20,
 			totalMetricsSent: 200,
 			metricsSent: []*regexp.Regexp{
 				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+ ((count|sum),)+10"),
@@ -158,10 +192,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "3 gauges",
 			statful:     statfulWithoutGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				s.Gauge("potatoes", 1, Tags{})
 				s.Gauge("turnips", 10, Tags{"foo": "bar"})
 				s.Gauge("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -174,10 +209,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "3 gauges with global tags",
 			statful:     statfulWithGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				s.Gauge("potatoes", 1, Tags{})
 				s.Gauge("turnips", 10, Tags{"foo": "bar"})
 				s.Gauge("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -190,11 +226,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "concurrent gauges",
 			statful:     statfulWithoutGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				wg := sync.WaitGroup{}
 				for i := 0; i < 10; i++ {
 					wg.Add(1)
-					go func(metrics *Statful, workerId string, wg *sync.WaitGroup) {
+					go func(metrics *statful, workerId string, wg *sync.WaitGroup) {
 						for i := 0; i < 20; i++ {
 							metrics.Gauge("potatoes", float64(1), Tags{"worker": workerId})
 						}
@@ -203,8 +239,9 @@ func TestStatfulSDK(t *testing.T) {
 				}
 
 				wg.Wait()
+				s.Flush()
 			},
-			totalFlushes:     10,
+			totalFlushes:     20,
 			totalMetricsSent: 200,
 			metricsSent: []*regexp.Regexp{
 				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+ last,+10"),
@@ -214,10 +251,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "3 histograms",
 			statful:     statfulWithoutGlobalTags,
-			metricsProducer: func(s *Statful) {
-				s.Histogram("potatoes", 1, Tags{})
-				s.Histogram("turnips", 10, Tags{"foo": "bar"})
-				s.Histogram("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+			metricsProducer: func(s *statful) {
+				s.Timer("potatoes", 1, Tags{})
+				s.Timer("turnips", 10, Tags{"foo": "bar"})
+				s.Timer("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -230,10 +268,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "3 histograms with global tags",
 			statful:     statfulWithGlobalTags,
-			metricsProducer: func(s *Statful) {
-				s.Histogram("potatoes", 1, Tags{})
-				s.Histogram("turnips", 10, Tags{"foo": "bar"})
-				s.Histogram("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+			metricsProducer: func(s *statful) {
+				s.Timer("potatoes", 1, Tags{})
+				s.Timer("turnips", 10, Tags{"foo": "bar"})
+				s.Timer("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -246,21 +285,22 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "concurrent histograms",
 			statful:     statfulWithoutGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				wg := sync.WaitGroup{}
 				for i := 0; i < 10; i++ {
 					wg.Add(1)
-					go func(metrics *Statful, workerId string, wg *sync.WaitGroup) {
+					go func(metrics *statful, workerId string, wg *sync.WaitGroup) {
 						for i := 0; i < 20; i++ {
-							metrics.Histogram("potatoes", float64(1), Tags{"worker": workerId})
+							metrics.Timer("potatoes", float64(1), Tags{"worker": workerId})
 						}
 						wg.Done()
 					}(s, strconv.Itoa(i), &wg)
 				}
 
 				wg.Wait()
+				s.Flush()
 			},
-			totalFlushes:     11,
+			totalFlushes:     20,
 			totalMetricsSent: 200,
 			metricsSent: []*regexp.Regexp{
 				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+ ((avg|count|p90),)+10"),
@@ -270,10 +310,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "3 custom metrics",
 			statful:     statfulWithoutGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				s.Put("potatoes", 1, Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
 				s.Put("turnips", 10, Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
 				s.Put("carrots", 100, Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Flush()
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -286,10 +327,11 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "3 custom metrics with global tags",
 			statful:     statfulWithGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				s.Put("potatoes", 1, Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
 				s.Put("turnips", 10, Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
 				s.Put("carrots", 100, Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Flush()
 			},
 			totalFlushes:     1,
 			totalMetricsSent: 3,
@@ -302,11 +344,12 @@ func TestStatfulSDK(t *testing.T) {
 		{
 			description: "concurrent custom metrics",
 			statful:     statfulWithoutGlobalTags,
-			metricsProducer: func(s *Statful) {
+			metricsProducer: func(s *statful) {
 				wg := sync.WaitGroup{}
+
 				for i := 0; i < 10; i++ {
 					wg.Add(1)
-					go func(metrics *Statful, workerId string, wg *sync.WaitGroup) {
+					go func(metrics *statful, workerId string, wg *sync.WaitGroup) {
 						for i := 0; i < 20; i++ {
 							metrics.Put("potatoes", 1, Tags{"worker": workerId}, time.Now().Unix(), Aggregations{}, Freq10s)
 						}
@@ -315,8 +358,9 @@ func TestStatfulSDK(t *testing.T) {
 				}
 
 				wg.Wait()
+				s.Flush()
 			},
-			totalFlushes:     8,
+			totalFlushes:     20,
 			totalMetricsSent: 200,
 			metricsSent: []*regexp.Regexp{
 				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+"),
@@ -326,8 +370,7 @@ func TestStatfulSDK(t *testing.T) {
 
 	for _, s := range scenarios {
 		t.Run(s.description, func(t *testing.T) {
-			cancelPeriodicFlush := s.statful.StartFlushInterval(25 * time.Millisecond)
-			go s.metricsProducer(&s.statful)
+			go s.metricsProducer(s.statful)
 
 			totalMetricsSent := 0
 			totalFlushes := 0
@@ -337,17 +380,17 @@ func TestStatfulSDK(t *testing.T) {
 				select {
 				case d := <-metricsData:
 					totalFlushes++
-					totalMetricsSent += len(regexp.MustCompile("\n").FindAllSubmatchIndex(d, -1))
+					totalMetricsSent += len(bytes.Split(d, []byte("\n")))
+
 					for _, r := range s.metricsSent {
 						if !r.Match(d) {
 							t.Error("flushed data not what was expected: \n\texpected: \"", r.String(), "\"\n\tactual", string(d))
 						}
 					}
-				case <-time.After(500 * time.Millisecond):
+				case <-time.After(100 * time.Millisecond):
 					break metricsReceiver
 				}
 			}
-			cancelPeriodicFlush()
 
 			if s.totalMetricsSent != totalMetricsSent {
 				t.Error("Different number of metrics sent: expected ", s.totalMetricsSent, "got", totalMetricsSent)

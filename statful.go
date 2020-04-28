@@ -1,6 +1,7 @@
 package statful
 
 import (
+	"sync"
 	"time"
 )
 
@@ -9,69 +10,110 @@ const (
 )
 
 var (
-	counterAggregations   = Aggregations{AggCount: struct{}{}, AggSum: struct{}{}}
-	gaugeAggregations     = Aggregations{AggLast: struct{}{}}
-	histogramAggregations = Aggregations{AggAvg: struct{}{}, AggCount: struct{}{}, AggP90: struct{}{}}
+	counterAggregations = Aggregations{AggCount: struct{}{}, AggSum: struct{}{}}
+	gaugeAggregations   = Aggregations{AggLast: struct{}{}}
+	timerAggregations   = Aggregations{AggAvg: struct{}{}, AggCount: struct{}{}, AggP90: struct{}{}}
 )
 
-type Statful struct {
-	Sender MetricsSender
-	GlobalTags Tags
+type statful struct {
+	sender bufferedMetricsSender
+
+	ticker     *time.Ticker
+	tickerDone chan bool
+
+	globalTags Tags
+}
+
+type Options struct {
+	DryRun        bool
+	Tags          Tags
+	FlushSize     int
+	FlushInterval time.Duration
+
+	Logger Logger
+	Client Client
+}
+
+func New(o Options) *statful {
+	statful := &statful{
+		sender: bufferedMetricsSender{
+			metricCount: 0,
+			flushSize:   o.FlushSize,
+			dryRun:      o.DryRun,
+			mu:          sync.Mutex{},
+			stdBuf:      make([]string, 0, o.FlushSize),
+			aggBuf:      make(map[Aggregation]map[AggregationFrequency][]string),
+			Client:      o.Client,
+			Logger:      o.Logger,
+		},
+		globalTags: o.Tags,
+	}
+
+	if o.FlushInterval > 0 {
+		statful.StartFlushInterval(o.FlushInterval)
+	}
+
+	return statful
 }
 
 // Starts a go routine that periodically flushes the metrics of MetricsSender
 // Returns a function that stops the timer.
-func (s *Statful) StartFlushInterval(interval time.Duration) func() {
+func (s *statful) StartFlushInterval(interval time.Duration) {
 	if interval < MinFlushInterval {
 		interval = MinFlushInterval
 	}
-	ticker := time.NewTicker(interval)
-	tickerDone := make(chan bool)
-	go func(s *Statful, ticker *time.Ticker, tickerDone chan bool) {
+
+	s.ticker = time.NewTicker(interval)
+	s.tickerDone = make(chan bool)
+	go func() {
 		for {
 			select {
-			case <-ticker.C:
-				s.Sender.Flush()
-			case <-tickerDone:
+			case <-s.ticker.C:
+				s.sender.Flush()
+			case <-s.tickerDone:
 				break
 			}
 		}
-	}(s, ticker, tickerDone)
-
-	return func() {
-		ticker.Stop()
-		tickerDone <- true
-	}
+	}()
 }
 
-// Creates a new counter and sends it using the MetricsSender
-// The counter is created with the default aggregations count and sum
-func (s *Statful) Counter(name string, value float64, tags Tags) {
+func (s *statful) StopFlushInterval() {
+	s.ticker.Stop()
+	s.tickerDone <- true
+}
+
+func (s *statful) Counter(name string, value float64, tags Tags) {
 	s.Put(name, value, tags, time.Now().Unix(), counterAggregations, Freq10s)
 }
 
-// Creates a new gauge and sends it using the MetricsSender
-// The gauge is created with the default aggregations last
-func (s *Statful) Gauge(name string, value float64, tags Tags) {
+func (s *statful) CounterAggregated(name string, value float64, tags Tags, aggregation Aggregation, frequency AggregationFrequency) {
+	s.PutAggregated(name, value, tags, time.Now().Unix(), aggregation, frequency)
+}
+
+func (s *statful) Gauge(name string, value float64, tags Tags) {
 	s.Put(name, value, tags, time.Now().Unix(), gaugeAggregations, Freq10s)
 }
 
-// Creates a new histogram and sends it using the MetricsSender
-// The histogram is created with the default aggregations avg, p90 and count
-func (s *Statful) Histogram(name string, value float64, tags Tags) {
-	s.Put(name, value, tags, time.Now().Unix(), histogramAggregations, Freq10s)
+func (s *statful) GaugeAggregated(name string, value float64, tags Tags, aggregation Aggregation, frequency AggregationFrequency) {
+	s.PutAggregated(name, value, tags, time.Now().Unix(), aggregation, frequency)
 }
 
-// Sends metric m using the MetricsSender.
-func (s *Statful) Put(name string, value float64, tags Tags, timestamp int64, aggs Aggregations, freq AggregationFrequency) error {
-	return s.Sender.Put([]*Metric{
-		{
-			Name:  name,
-			Value: value,
-			Timestamp: timestamp,
-			Tags:  tags.Merge(s.GlobalTags),
-			Aggs:  aggs,
-			Freq:  freq,
-		},
-	})
+func (s *statful) Timer(name string, value float64, tags Tags) {
+	s.Put(name, value, tags, time.Now().Unix(), timerAggregations, Freq10s)
+}
+
+func (s *statful) TimerAggregated(name string, value float64, tags Tags, aggregation Aggregation, frequency AggregationFrequency) {
+	s.PutAggregated(name, value, tags, time.Now().Unix(), aggregation, frequency)
+}
+
+func (s *statful) Put(name string, value float64, tags Tags, timestamp int64, aggs Aggregations, freq AggregationFrequency) error {
+	return s.sender.Send(name, value, tags.Merge(s.globalTags), timestamp, aggs, freq)
+}
+
+func (s *statful) PutAggregated(name string, value float64, tags Tags, timestamp int64, agg Aggregation, freq AggregationFrequency) error {
+	return s.sender.SendAggregated(name, value, tags.Merge(s.globalTags), timestamp, agg, freq)
+}
+
+func (s *statful) Flush() {
+	s.sender.Flush()
 }

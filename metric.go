@@ -5,37 +5,27 @@ import (
 	"strings"
 )
 
-type Metric struct {
-	Name      string
-	Value     float64
-	Timestamp int64
-	Tags      Tags
-	Aggs      Aggregations
-	Freq      AggregationFrequency
-}
-
 // metric[,tag1=value][,tag2=value] value unix_timestamp [aggregation1][,aggregation2][,aggregation_frequency]
-func (m *Metric) String() string {
+func MetricToString(name string, value float64, tags Tags, timestamp int64, aggregations Aggregations, frequency AggregationFrequency) string {
 	var b strings.Builder
 
 	// metric_name
-	b.WriteString(m.Name)
+	b.WriteString(name)
 	// tags
-	for tk, tv := range m.Tags {
+	for tk, tv := range tags {
 		fmt.Fprintf(&b, ",%v=%v", tk, tv)
 	}
 	// value and timestamp
-	fmt.Fprintf(&b, " %f %d", m.Value, m.Timestamp)
+	fmt.Fprintf(&b, " %f %d", value, timestamp)
 	// aggregations
-	if len(m.Aggs) > 0 {
+	if len(aggregations) > 0 {
 		fmt.Fprintf(&b, " ")
-		for agg, _ := range m.Aggs {
+		for agg, _ := range aggregations {
 			fmt.Fprintf(&b, "%v,", agg)
 		}
 		// aggregation frequency
-		fmt.Fprintf(&b, "%d", m.Freq)
+		fmt.Fprintf(&b, "%d", frequency)
 	}
 
-	fmt.Fprintln(&b, "")
 	return b.String()
 }

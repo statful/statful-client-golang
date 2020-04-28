@@ -5,11 +5,6 @@ import (
 )
 
 type Client interface {
-	Send(data io.Reader) error
-}
-
-type FuncClient func (io.Reader) error
-
-func (f FuncClient) Send(data io.Reader) error {
-	return f(data)
+	Put(data io.Reader) error
+	PutAggregated(data io.Reader, agg Aggregation, frequency AggregationFrequency) error
 }

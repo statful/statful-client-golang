@@ -120,7 +120,7 @@ func TestApiClient_PutMetrics_Success(t *testing.T) {
 			},
 		}
 
-		err := api.Send(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
+		err := api.Put(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
 		if err != nil {
 			t.Errorf("Failed to put metrics: %v", err)
 		}
@@ -136,7 +136,7 @@ func TestApiClient_PutMetrics_Success(t *testing.T) {
 			},
 		}
 
-		err = api.Send(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
+		err = api.Put(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
 		if err != nil {
 			t.Errorf("Failed to put metrics: %v", err)
 		}
@@ -225,11 +225,8 @@ func TestUdpClient_PutMetrics(t *testing.T) {
 				Timeout: 2 * time.Second,
 			}
 
-			SetDebugLogger(t.Log)
-			SetErrorLogger(t.Log)
-
 			udpServerPacket := getUdpPacket(t, udpAddr, func() {
-				err := udp.Send(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
+				err := udp.Put(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
 				if err != nil {
 					t.Fatal("Failed to put metrics:", err)
 				}
