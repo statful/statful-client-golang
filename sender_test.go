@@ -113,7 +113,7 @@ func TestApiClient_PutMetrics_Success(t *testing.T) {
 		api := HttpSender{
 			Url:      s.url,
 			BasePath: s.basePath,
-			Token: s.apiToken,
+			Token:    s.apiToken,
 			Http: &http.Client{
 				Transport: s.roundTripper(t, s.metrics),
 				Timeout:   2 * time.Second,
@@ -128,7 +128,7 @@ func TestApiClient_PutMetrics_Success(t *testing.T) {
 		api = HttpSender{
 			Url:           s.url,
 			BasePath:      s.basePath,
-			Token:      s.apiToken,
+			Token:         s.apiToken,
 			NoCompression: true,
 			Http: &http.Client{
 				Transport: s.roundTripper(t, s.metrics),
@@ -226,7 +226,7 @@ func TestUdpClient_PutMetrics(t *testing.T) {
 			}
 
 			udpServerPacket := getUdpPacket(t, udpAddr, func() {
-				err := udp.Put(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
+				err := udp.Send(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
 				if err != nil {
 					t.Fatal("Failed to put metrics:", err)
 				}

@@ -81,7 +81,10 @@ func (s *buffer) flushBuffers(stdBuf []string, aggBuf map[Aggregation]map[Aggreg
 				s.Logger.Println("Dry metric:", m)
 			}
 		} else {
-			s.Sender.Send(strings.NewReader(strings.Join(stdBuf, "\n")))
+			err := s.Sender.Send(strings.NewReader(strings.Join(stdBuf, "\n")))
+			if err != nil {
+				s.Logger.Println("Failed to send metrics", err)
+			}
 		}
 	}
 
