@@ -2,240 +2,402 @@ package statful
 
 import (
 	"bytes"
-	"compress/gzip"
+	"context"
+	"fmt"
+	"io"
 	"io/ioutil"
-	"net"
+	"log"
 	"net/http"
-	"strings"
+	"os"
+	"regexp"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
 
-const (
-	apiUrl      = "https://api.statful.com"
-	apiBasePath = "/tel/v2.0"
-	apiToken    = "12345678-90ab-cdef-1234-567890abcdef"
-	udpAddr     = ":2013"
-)
+type funcSender func(...interface{}) error
 
-type RoundTripFunc func(req *http.Request) *http.Response
-
-func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req), nil
+func (f funcSender) Send(data io.Reader) error {
+	if all, err := ioutil.ReadAll(data); err != nil {
+		return err
+	} else {
+		return f(string(all))
+	}
 }
 
-var successFullRoundTripper = func(t *testing.T, metrics []string) RoundTripFunc {
-	return RoundTripFunc(func(req *http.Request) *http.Response {
-		verifyRequest(t, req, metrics)
-		return &http.Response{
-			StatusCode: 200,
-			Header:     make(http.Header),
-			Body:       ioutil.NopCloser(bytes.NewBufferString("{\"code\":\"SUCCESS\"}")),
-			Request:    req,
-		}
+func (f funcSender) SendAggregated(data io.Reader, agg Aggregation, frequency AggregationFrequency) error {
+	if all, err := ioutil.ReadAll(data); err != nil {
+		return err
+	} else {
+		return f(string(all), agg, frequency)
+	}
+}
+
+type fmtLogger func(...interface{}) (int, error)
+
+func (f fmtLogger) Println(v ...interface{}) {
+	f(v...)
+}
+
+func ExampleSimple() {
+	metrics := New(Configuration{
+		FlushSize: 10,
+		Logger: fmtLogger(fmt.Println),
+		Tags:   Tags{"client": "golang"},
+		DryRun: true,
 	})
+
+	metrics.Put("test.demo.metric", 100, Tags{}, 0, Aggregations{}, Freq10s)
+	metrics.Flush()
+	// Output: Dry metric: test.demo.metric,client=golang 100.000000 0
 }
 
-func verifyRequest(t *testing.T, req *http.Request, metrics []string) {
-	if !strings.HasPrefix(req.URL.String(), apiUrl) {
-		t.Errorf("url is different than configured: expected %v got %v", apiUrl, req.URL.String())
-	}
-	if req.Header.Get("m-api-token") != apiToken {
-		t.Errorf("missing api token: expected %v got %v", apiToken, req.Header.Get("m-api-token"))
-	}
-	if req.Header.Get("content-type") != "text/plain" {
-		t.Errorf("content not in expected format: expected %v got %v", "text/plain", req.Header.Get("content-type"))
-	}
-
-	body := req.Body
-	defer body.Close()
-
-	if req.Header.Get("content-encoding") == "gzip" {
-		r, err := gzip.NewReader(body)
-		if err != nil {
-			t.Errorf("Failed to unzip data: %v", err)
-		}
-		body = r
-	}
-
-	payload, err := ioutil.ReadAll(body)
-	if err != nil {
-		t.Errorf("Failed to read payload: %v", err)
-	}
-
-	for idx, ml := range strings.Split(string(payload), "\n") {
-		if ml != metrics[idx] {
-			t.Errorf("different metric lines: expected \"%v\" got \"%v\"", metrics[idx], ml)
-		}
-	}
-}
-
-func TestApiClient_PutMetrics_Success(t *testing.T) {
-	scenarios := []struct {
-		description  string
-		url          string
-		basePath     string
-		apiToken     string
-		roundTripper func(*testing.T, []string) RoundTripFunc
-		metrics      []string
-	}{
-		{
-			description: "ApiClient send single metric",
-			url:         apiUrl,
-			basePath:    apiBasePath,
-			apiToken:    apiToken,
-			metrics: []string{
-				"test.demo.metric,Client=golang,env=test 100 1585161000",
-			},
-			roundTripper: successFullRoundTripper,
-		}, {
-			description: "ApiClient send multiple metrics",
-			url:         apiUrl,
-			basePath:    apiBasePath,
-			apiToken:    apiToken,
-			metrics: []string{
-				"test.demo.metric 50 1585161006",
-				"test.demo.metric,Client=golang,env=test 100 1585161000",
-				"test.demo.metric 200 1585161001 count,10",
-				"test.demo.metric,Client=golang,env=test 300 1585161010 count,10",
-				"test.demo.metric 400 1585161011 avg,p90,10",
-				"test.demo.metric,Client=golang,env=test 500 1585161100 avg,p90,10",
-				"test.demo.metric,Client=golang,env=test 600 1585161101",
-				"test.demo.metric,Client=golang,env=test 700 1585161110",
-				"test.demo.metric,Client=golang,env=test 800 1585161111",
-				"test.demo.metric,Client=golang,env=test 900 1585161002",
-			},
-			roundTripper: successFullRoundTripper,
+func ExampleHttpServer() {
+	client := New(Configuration{
+		DryRun:        false,
+		Tags:          Tags{"client": "golang"},
+		FlushSize:     50,
+		FlushInterval: 10 * time.Second,
+		Logger:        log.New(os.Stderr, "", log.LstdFlags),
+		Sender: &HttpClient{
+			Http:  &http.Client{},
+			Url:   "https://api.Sender.com",
+			Token: "12345678-90ab-cdef-1234-567890abcdef",
 		},
-	}
+	})
 
-	for _, s := range scenarios {
-		api := ApiClient{
-			Url:      s.url,
-			BasePath: s.basePath,
-			Token: s.apiToken,
-			Http: &http.Client{
-				Transport: s.roundTripper(t, s.metrics),
-				Timeout:   2 * time.Second,
-			},
-		}
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		client.Counter("http_requests_total", 1, Tags{"status_code": "200", "uri": r.URL.String()})
+		w.WriteHeader(http.StatusOK)
+	})
 
-		err := api.Put(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
-		if err != nil {
-			t.Errorf("Failed to put metrics: %v", err)
-		}
+	srv := &http.Server{Addr: ":8080"}
 
-		api = ApiClient{
-			Url:           s.url,
-			BasePath:      s.basePath,
-			Token:      s.apiToken,
-			NoCompression: true,
-			Http: &http.Client{
-				Transport: s.roundTripper(t, s.metrics),
-				Timeout:   2 * time.Second,
-			},
-		}
-
-		err = api.Put(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
-		if err != nil {
-			t.Errorf("Failed to put metrics: %v", err)
-		}
-	}
+	srv.Shutdown(context.TODO())
+	client.StopFlushInterval()
 }
 
-func TestApiClient_PutMetrics_FailToCompressData(t *testing.T) {}
-
-func TestApiClient_PutMetrics_FailToCreateRequest(t *testing.T) {}
-
-func TestApiClient_PutMetrics_FailToPerformRequest(t *testing.T) {}
-
-func TestApiClient_PutMetrics_FailToReadBody(t *testing.T) {}
-
-func TestApiClient_PutMetrics_FailStatusCodeNot200(t *testing.T) {}
-
-func getUdpPacket(t *testing.T, addr string, request func()) []byte {
-	// listen for udp packets
-	resAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		t.Fatal("Failed to resolve udp address:", err)
-	}
-	listener, err := net.ListenUDP("udp", resAddr)
-	if err != nil {
-		t.Fatal("Failed to listen for udp packets:", err)
-	}
-	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Fatal("Failed to close udp listener:", err)
-		}
-	}()
-
-	// execute request
-	request()
-
-	//read all messages until 0 bytes are read
-	message := make([]byte, 1024*32)
-	var bufLen int
-	for {
-		_ = listener.SetReadDeadline(time.Now().Add(time.Millisecond))
-		n, _, err := listener.ReadFrom(message[bufLen:])
-		if n == 0 {
-			break
-		} else {
-			bufLen += n
-		}
-		if err != nil {
-			t.Fatal("Failed to read udp packets", err, n)
-		}
-	}
-
-	return message[0:bufLen]
+type ChannelSender struct {
+	data chan<- []byte
 }
 
-func TestUdpClient_PutMetrics(t *testing.T) {
+func (c *ChannelSender) Send(data io.Reader) error {
+	all, err := ioutil.ReadAll(data)
+	if err != nil {
+		return err
+	}
+	c.data <- all
+	return nil
+}
+
+func (c *ChannelSender) SendAggregated(data io.Reader, agg Aggregation, freq AggregationFrequency) error {
+	all, err := ioutil.ReadAll(data)
+	if err != nil {
+		return err
+	}
+	c.data <- all
+	return nil
+}
+
+func TestStatfulSDK(t *testing.T) {
+	metricsData := make(chan []byte, 1)
+
+	statfulWithoutGlobalTags := New(Configuration{
+		FlushSize:     10,
+		Logger:        log.New(os.Stderr, "", log.LstdFlags),
+		Sender: &ChannelSender{
+			data: metricsData,
+		},
+	})
+
+	statfulWithGlobalTags := New(Configuration{
+		FlushSize:     10,
+		Logger:        log.New(os.Stderr, "", log.LstdFlags),
+		Sender: &ChannelSender{
+			data: metricsData,
+		},
+		Tags: Tags{"global": "tag"},
+	})
+	//cancelPeriodicFlush := statfulMetrics.StartFlushInterval(1 * time.Second)
+
 	scenarios := []struct {
-		description string
-		metrics     []string
+		description      string
+		statful          *Client
+		metricsProducer  func(s *Client)
+		totalFlushes     int
+		totalMetricsSent int
+		metricsSent      []*regexp.Regexp
 	}{
+		// counters only
 		{
-			description: "UdpClient send single metric",
-			metrics: []string{
-				"test.demo.metric,Client=golang,env=test 100 1585161000",
+			description: "3 Counters with tags",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.Counter("potatoes", 2, Tags{})
+				s.Counter("potatoes", 20, Tags{"foo": "bar"})
+				s.Counter("potatoes", 200, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
 			},
-		}, {
-			description: "UdpClient send multiple metrics",
-			metrics: []string{
-				"test.demo.metric 50 1585161006",
-				"test.demo.metric,Client=golang,env=test 100 1585161000",
-				"test.demo.metric 200 1585161001 count,10",
-				"test.demo.metric,Client=golang,env=test 300 1585161010 count,10",
-				"test.demo.metric 400 1585161011 avg,p90,10",
-				"test.demo.metric,Client=golang,env=test 500 1585161100 avg,p90,10",
-				"test.demo.metric,Client=golang,env=test 600 1585161101",
-				"test.demo.metric,Client=golang,env=test 700 1585161110",
-				"test.demo.metric,Client=golang,env=test 800 1585161111",
-				"test.demo.metric,Client=golang,env=test 900 1585161002",
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes 2\\.0+ [0-9]+ ((count|sum),)+10"),
+				regexp.MustCompile("potatoes,foo=bar 20\\.0+ [0-9]+ ((count|sum),)+10"),
+				regexp.MustCompile("potatoes(,(global=tag|foo=bar))+ 200\\.0+ [0-9]+ ((count|sum),)+10"),
+			},
+		},
+		{
+			description: "3 counters with global tags",
+			statful:     statfulWithGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.Counter("potatoes", 2, Tags{})
+				s.Counter("potatoes", 20, Tags{"foo": "bar"})
+				s.Counter("potatoes", 200, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,global=tag 2\\.0+ [0-9]+ ((count|sum),)+10"),
+				regexp.MustCompile("potatoes(,(global=tag|foo=bar))+ 20\\.0+ [0-9]+ ((count|sum),)+10"),
+				regexp.MustCompile("potatoes(,(global=tag|foo=bar))+ 200\\.0+ [0-9]+ ((count|sum),)+10"),
+			},
+		},
+		{
+			description: "concurrent counters",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				wg := sync.WaitGroup{}
+				for i := 0; i < 10; i++ {
+					wg.Add(1)
+					go func(metrics *Client, workerId string, wg *sync.WaitGroup) {
+						for i := 0; i < 20; i++ {
+							metrics.Counter("potatoes", float64(1), Tags{"worker": workerId})
+						}
+						wg.Done()
+					}(s, strconv.Itoa(i), &wg)
+				}
+
+				wg.Wait()
+				s.Flush()
+			},
+			totalFlushes:     20,
+			totalMetricsSent: 200,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+ ((count|sum),)+10"),
+			},
+		},
+		// gauges only
+		{
+			description: "3 gauges",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.Gauge("potatoes", 1, Tags{})
+				s.Gauge("turnips", 10, Tags{"foo": "bar"})
+				s.Gauge("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes 1\\.0+ [0-9]+ last,10"),
+				regexp.MustCompile("turnips,foo=bar 10\\.0+ [0-9]+ last,10"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+ [0-9]+ last,10"),
+			},
+		},
+		{
+			description: "3 gauges with global tags",
+			statful:     statfulWithGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.Gauge("potatoes", 1, Tags{})
+				s.Gauge("turnips", 10, Tags{"foo": "bar"})
+				s.Gauge("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,global=tag 1\\.0+ [0-9]+ last,10"),
+				regexp.MustCompile("turnips(,(global=tag|foo=bar))+ 10\\.0+ [0-9]+ last,10"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+ [0-9]+ last,10"),
+			},
+		},
+		{
+			description: "concurrent gauges",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				wg := sync.WaitGroup{}
+				for i := 0; i < 10; i++ {
+					wg.Add(1)
+					go func(metrics *Client, workerId string, wg *sync.WaitGroup) {
+						for i := 0; i < 20; i++ {
+							metrics.Gauge("potatoes", float64(1), Tags{"worker": workerId})
+						}
+						wg.Done()
+					}(s, strconv.Itoa(i), &wg)
+				}
+
+				wg.Wait()
+				s.Flush()
+			},
+			totalFlushes:     20,
+			totalMetricsSent: 200,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+ last,+10"),
+			},
+		},
+		// histograms only
+		{
+			description: "3 histograms",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.Timer("potatoes", 1, Tags{})
+				s.Timer("turnips", 10, Tags{"foo": "bar"})
+				s.Timer("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes 1\\.0+ [0-9]+ ((avg|count|p90),)+10"),
+				regexp.MustCompile("turnips,foo=bar 10\\.0+ [0-9]+ ((avg|count|p90),)+10"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+ [0-9]+ ((avg|count|p90),)+10"),
+			},
+		},
+		{
+			description: "3 histograms with global tags",
+			statful:     statfulWithGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.Timer("potatoes", 1, Tags{})
+				s.Timer("turnips", 10, Tags{"foo": "bar"})
+				s.Timer("carrots", 100, Tags{"foo": "bar", "global": "tag"})
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,global=tag 1\\.0+ [0-9]+ ((avg|count|p90),)+10"),
+				regexp.MustCompile("turnips(,(global=tag|foo=bar))+ 10\\.0+ [0-9]+ ((avg|count|p90),)+10"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+ [0-9]+ ((avg|count|p90),)+10"),
+			},
+		},
+		{
+			description: "concurrent histograms",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				wg := sync.WaitGroup{}
+				for i := 0; i < 10; i++ {
+					wg.Add(1)
+					go func(metrics *Client, workerId string, wg *sync.WaitGroup) {
+						for i := 0; i < 20; i++ {
+							metrics.Timer("potatoes", float64(1), Tags{"worker": workerId})
+						}
+						wg.Done()
+					}(s, strconv.Itoa(i), &wg)
+				}
+
+				wg.Wait()
+				s.Flush()
+			},
+			totalFlushes:     20,
+			totalMetricsSent: 200,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+ ((avg|count|p90),)+10"),
+			},
+		},
+		// custom metrics only
+		{
+			description: "3 custom metrics",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.Put("potatoes", 1, Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Put("turnips", 10, Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Put("carrots", 100, Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes 1\\.0+ [0-9]+"),
+				regexp.MustCompile("turnips,foo=bar 10\\.0+ [0-9]+"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+ [0-9]+"),
+			},
+		},
+		{
+			description: "3 custom metrics with global tags",
+			statful:     statfulWithGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.Put("potatoes", 1, Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Put("turnips", 10, Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Put("carrots", 100, Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,global=tag 1\\.0+ [0-9]+"),
+				regexp.MustCompile("turnips(,(global=tag|foo=bar))+ 10\\.0+ [0-9]+"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+ [0-9]+"),
+			},
+		},
+		{
+			description: "concurrent custom metrics",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				wg := sync.WaitGroup{}
+
+				for i := 0; i < 10; i++ {
+					wg.Add(1)
+					go func(metrics *Client, workerId string, wg *sync.WaitGroup) {
+						for i := 0; i < 20; i++ {
+							metrics.Put("potatoes", 1, Tags{"worker": workerId}, time.Now().Unix(), Aggregations{}, Freq10s)
+						}
+						wg.Done()
+					}(s, strconv.Itoa(i), &wg)
+				}
+
+				wg.Wait()
+				s.Flush()
+			},
+			totalFlushes:     20,
+			totalMetricsSent: 200,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+"),
 			},
 		},
 	}
 
 	for _, s := range scenarios {
 		t.Run(s.description, func(t *testing.T) {
-			udp := UdpClient{
-				Address: udpAddr,
-				Timeout: 2 * time.Second,
+			go s.metricsProducer(s.statful)
+
+			totalMetricsSent := 0
+			totalFlushes := 0
+
+		metricsReceiver:
+			for {
+				select {
+				case d := <-metricsData:
+					totalFlushes++
+					totalMetricsSent += len(bytes.Split(d, []byte("\n")))
+
+					for _, r := range s.metricsSent {
+						if !r.Match(d) {
+							t.Error("flushed data not what was expected: \n\texpected: \"", r.String(), "\"\n\tactual", string(d))
+						}
+					}
+				case <-time.After(100 * time.Millisecond):
+					break metricsReceiver
+				}
 			}
 
-			udpServerPacket := getUdpPacket(t, udpAddr, func() {
-				err := udp.Put(bytes.NewBufferString(strings.Join(s.metrics, "\n")))
-				if err != nil {
-					t.Fatal("Failed to put metrics:", err)
-				}
-			})
+			if s.totalMetricsSent != totalMetricsSent {
+				t.Error("Different number of metrics sent: expected ", s.totalMetricsSent, "got", totalMetricsSent)
+			}
 
-			for idx, ml := range strings.Split(string(udpServerPacket), "\n") {
-				if ml != s.metrics[idx] {
-					t.Errorf("different metric lines: expected \"%v\" got \"%v\"", s.metrics[idx], ml)
-				}
+			if s.totalFlushes != totalFlushes {
+				t.Error("Different number of flushes: expected ", s.totalFlushes, "got", totalFlushes)
 			}
 		})
 	}

@@ -7,17 +7,24 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
+
+type Sender interface {
+	Send(data io.Reader) error
+	SendAggregated(data io.Reader, agg Aggregation, frequency AggregationFrequency) error
+}
 
 const (
 	ep_metrics            = "/tel/v2.0/metrics"
 	ep_metrics_aggregated = "/tel/v2.0/aggregation/:agg/frequency/:freq"
 )
 
-type ApiClient struct {
+type HttpClient struct {
 	Http          *http.Client
 	Url           string
 	BasePath      string
@@ -25,24 +32,24 @@ type ApiClient struct {
 	NoCompression bool
 }
 
-func (a *ApiClient) Put(data io.Reader) error {
-	p := a.Url + a.BasePath + ep_metrics
+func (h *HttpClient) Send(data io.Reader) error {
+	p := h.Url + h.BasePath + ep_metrics
 
-	return a.do(http.MethodPut, p, data)
+	return h.do(http.MethodPut, p, data)
 }
 
-func (a *ApiClient) PutAggregated(data io.Reader, agg Aggregation, freq AggregationFrequency) error {
-	p := a.Url + a.BasePath + ep_metrics_aggregated
+func (h *HttpClient) SendAggregated(data io.Reader, agg Aggregation, freq AggregationFrequency) error {
+	p := h.Url + h.BasePath + ep_metrics_aggregated
 	p = strings.Replace(p, ":agg", string(agg), -1)
 	p = strings.Replace(p, ":freq", strconv.Itoa(int(freq)), -1)
 
-	return a.do(http.MethodPut, p, data)
+	return h.do(http.MethodPut, p, data)
 }
 
-func (a *ApiClient) do(method string, url string, data io.Reader) error {
+func (h *HttpClient) do(method string, url string, data io.Reader) error {
 	headers := http.Header{}
 
-	if !a.NoCompression {
+	if !h.NoCompression {
 		compressed, err := gzipData(data)
 		if err != nil {
 			return err
@@ -51,7 +58,7 @@ func (a *ApiClient) do(method string, url string, data io.Reader) error {
 		headers.Set("Content-Encoding", "gzip")
 	}
 
-	headers.Set("M-Api-Token", a.Token)
+	headers.Set("M-API-Token", h.Token)
 	headers.Set("Content-Type", "text/plain")
 
 	req, err := http.NewRequest(method, url, data)
@@ -60,7 +67,7 @@ func (a *ApiClient) do(method string, url string, data io.Reader) error {
 		return err
 	}
 
-	resp, err := a.Http.Do(req)
+	resp, err := h.Http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -98,3 +105,26 @@ func gzipData(reader io.Reader) (io.Reader, error) {
 	return bytes.NewReader(buf.Bytes()), nil
 }
 
+type UdpClient struct {
+	Address string
+	Timeout time.Duration
+}
+
+func (u *UdpClient) Put(reader io.Reader) error {
+	conn, err := net.Dial("udp", u.Address)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = io.Copy(conn, reader)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (u *UdpClient) PutAggregated(reader io.Reader) error {
+	return errors.New("UNSUPPORTED_OPERATION")
+}

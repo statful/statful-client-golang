@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type bufferedMetricsSender struct {
+type buffer struct {
 	metricCount int
 	flushSize   int
 	dryRun      bool
@@ -15,11 +15,11 @@ type bufferedMetricsSender struct {
 	stdBuf []string
 	aggBuf map[Aggregation]map[AggregationFrequency][]string
 
-	Client Client
+	Sender Sender
 	Logger Logger
 }
 
-func (s *bufferedMetricsSender) Send(name string, value float64, tags Tags, timestamp int64, aggregations Aggregations, frequency AggregationFrequency) error {
+func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, aggregations Aggregations, frequency AggregationFrequency) error {
 	// put the metric in the buffer
 	s.mu.Lock()
 	s.stdBuf = append(s.stdBuf, MetricToString(name, value, tags, timestamp, aggregations, frequency))
@@ -34,7 +34,7 @@ func (s *bufferedMetricsSender) Send(name string, value float64, tags Tags, time
 	return nil
 }
 
-func (s *bufferedMetricsSender) SendAggregated(name string, value float64, tags Tags, timestamp int64, aggregation Aggregation, frequency AggregationFrequency) error {
+func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp int64, aggregation Aggregation, frequency AggregationFrequency) error {
 	// put the metric in the buffer
 	s.mu.Lock()
 	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, tags, timestamp, Aggregations{}, 0))
@@ -49,7 +49,7 @@ func (s *bufferedMetricsSender) SendAggregated(name string, value float64, tags 
 	return nil
 }
 
-func (s *bufferedMetricsSender) Flush() {
+func (s *buffer) Flush() {
 	s.mu.Lock()
 	stdBuf, aggBuf := s.drainBuffers()
 	s.mu.Unlock()
@@ -57,7 +57,7 @@ func (s *bufferedMetricsSender) Flush() {
 	s.flushBuffers(stdBuf, aggBuf)
 }
 
-func (s *bufferedMetricsSender) drainBuffers() ([]string, map[Aggregation]map[AggregationFrequency][]string) {
+func (s *buffer) drainBuffers() ([]string, map[Aggregation]map[AggregationFrequency][]string) {
 	var stdBuf []string
 	var aggBuf map[Aggregation]map[AggregationFrequency][]string
 
@@ -74,14 +74,14 @@ func (s *bufferedMetricsSender) drainBuffers() ([]string, map[Aggregation]map[Ag
 	return stdBuf, aggBuf
 }
 
-func (s *bufferedMetricsSender) flushBuffers(stdBuf []string, aggBuf map[Aggregation]map[AggregationFrequency][]string) {
+func (s *buffer) flushBuffers(stdBuf []string, aggBuf map[Aggregation]map[AggregationFrequency][]string) {
 	if len(stdBuf) > 0 {
 		if s.dryRun {
 			for _, m := range stdBuf {
 				s.Logger.Println("Dry metric:", m)
 			}
 		} else {
-			s.Client.Put(strings.NewReader(strings.Join(stdBuf, "\n")))
+			s.Sender.Send(strings.NewReader(strings.Join(stdBuf, "\n")))
 		}
 	}
 
@@ -90,7 +90,7 @@ func (s *bufferedMetricsSender) flushBuffers(stdBuf []string, aggBuf map[Aggrega
 			if s.dryRun {
 				s.Logger.Println("Dry aggregated metric:", buf, agg, freq)
 			} else {
-				s.Client.PutAggregated(strings.NewReader(strings.Join(buf, "\n")), agg, freq)
+				s.Sender.SendAggregated(strings.NewReader(strings.Join(buf, "\n")), agg, freq)
 			}
 		}
 	}
