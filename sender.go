@@ -110,7 +110,7 @@ type UdpSender struct {
 	Timeout time.Duration
 }
 
-func (u *UdpSender) Put(reader io.Reader) error {
+func (u *UdpSender) Send(reader io.Reader) error {
 	conn, err := net.Dial("udp", u.Address)
 	if err != nil {
 		return err
@@ -125,6 +125,6 @@ func (u *UdpSender) Put(reader io.Reader) error {
 	return nil
 }
 
-func (u *UdpSender) PutAggregated(reader io.Reader) error {
+func (u *UdpSender) SendAggregated(io.Reader, Aggregation, AggregationFrequency) error {
 	return errors.New("UNSUPPORTED_OPERATION")
 }
