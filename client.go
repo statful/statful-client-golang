@@ -16,7 +16,7 @@ var (
 )
 
 type Client struct {
-	sender buffer
+	buffer buffer
 
 	ticker     *time.Ticker
 	tickerDone chan bool
@@ -36,7 +36,7 @@ type Configuration struct {
 
 func New(cfg Configuration) *Client {
 	statful := &Client{
-		sender: buffer{
+		buffer: buffer{
 			metricCount: 0,
 			flushSize:   cfg.FlushSize,
 			dryRun:      cfg.DryRun,
@@ -69,7 +69,7 @@ func (c *Client) StartFlushInterval(interval time.Duration) {
 		for {
 			select {
 			case <-c.ticker.C:
-				c.sender.Flush()
+				c.buffer.Flush()
 			case <-c.tickerDone:
 				break
 			}
@@ -107,13 +107,13 @@ func (c *Client) TimerAggregated(name string, value float64, tags Tags, aggregat
 }
 
 func (c *Client) Put(name string, value float64, tags Tags, timestamp int64, aggs Aggregations, freq AggregationFrequency) error {
-	return c.sender.Put(name, value, tags.Merge(c.globalTags), timestamp, aggs, freq)
+	return c.buffer.Put(name, value, tags.Merge(c.globalTags), timestamp, aggs, freq)
 }
 
 func (c *Client) PutAggregated(name string, value float64, tags Tags, timestamp int64, agg Aggregation, freq AggregationFrequency) error {
-	return c.sender.PutAggregated(name, value, tags.Merge(c.globalTags), timestamp, agg, freq)
+	return c.buffer.PutAggregated(name, value, tags.Merge(c.globalTags), timestamp, agg, freq)
 }
 
 func (c *Client) Flush() {
-	c.sender.Flush()
+	c.buffer.Flush()
 }

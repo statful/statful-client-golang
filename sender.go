@@ -58,7 +58,7 @@ func (h *HttpSender) do(method string, url string, data io.Reader) error {
 		headers.Set("Content-Encoding", "gzip")
 	}
 
-	headers.Set("M-API	-Token", h.Token)
+	headers.Set("M-API-Token", h.Token)
 	headers.Set("Content-Type", "text/plain")
 
 	req, err := http.NewRequest(method, url, data)
