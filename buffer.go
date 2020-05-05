@@ -37,6 +37,10 @@ func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, agg
 func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp int64, aggregation Aggregation, frequency AggregationFrequency) error {
 	// put the metric in the buffer
 	s.mu.Lock()
+	if s.aggBuf[aggregation] == nil {
+		s.aggBuf[aggregation] = make(map[AggregationFrequency][]string)
+	}
+	
 	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, tags, timestamp, Aggregations{}, 0))
 	s.metricCount++
 
