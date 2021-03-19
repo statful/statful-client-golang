@@ -117,3 +117,8 @@ func (c *Client) PutAggregated(name string, value float64, tags Tags, timestamp 
 func (c *Client) Flush() {
 	c.buffer.Flush()
 }
+
+// FlushError flushes the client buffer and returns a FlushErr error if any errors happen.
+func (c *Client) FlushError() error {
+	return c.buffer.FlushError()
+}

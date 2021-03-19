@@ -10,7 +10,7 @@ type buffer struct {
 	flushSize   int
 	dryRun      bool
 
-	mu  sync.Mutex
+	mu sync.Mutex
 
 	stdBuf []string
 	aggBuf map[Aggregation]map[AggregationFrequency][]string
@@ -40,7 +40,7 @@ func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp 
 	if s.aggBuf[aggregation] == nil {
 		s.aggBuf[aggregation] = make(map[AggregationFrequency][]string)
 	}
-	
+
 	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, tags, timestamp, Aggregations{}, 0))
 	s.metricCount++
 
@@ -58,7 +58,16 @@ func (s *buffer) Flush() {
 	stdBuf, aggBuf := s.drainBuffers()
 	s.mu.Unlock()
 
-	s.flushBuffers(stdBuf, aggBuf)
+	_ = s.flushBuffers(stdBuf, aggBuf)
+}
+
+// FlushError flushes the buffer and returns a FlushErr error if any errors happen.
+func (s *buffer) FlushError() error {
+	s.mu.Lock()
+	stdBuf, aggBuf := s.drainBuffers()
+	s.mu.Unlock()
+
+	return s.flushBuffers(stdBuf, aggBuf)
 }
 
 func (s *buffer) drainBuffers() ([]string, map[Aggregation]map[AggregationFrequency][]string) {
@@ -78,7 +87,9 @@ func (s *buffer) drainBuffers() ([]string, map[Aggregation]map[AggregationFreque
 	return stdBuf, aggBuf
 }
 
-func (s *buffer) flushBuffers(stdBuf []string, aggBuf map[Aggregation]map[AggregationFrequency][]string) {
+func (s *buffer) flushBuffers(stdBuf []string, aggBuf map[Aggregation]map[AggregationFrequency][]string) error {
+	var flushErr FlushErr
+
 	if len(stdBuf) > 0 {
 		if s.dryRun {
 			for _, m := range stdBuf {
@@ -88,6 +99,7 @@ func (s *buffer) flushBuffers(stdBuf []string, aggBuf map[Aggregation]map[Aggreg
 			err := s.Sender.Send(strings.NewReader(strings.Join(stdBuf, "\n")))
 			if err != nil {
 				s.Logger.Println("Failed to send metrics", err)
+				flushErr = flushErr.appendErr(err)
 			}
 		}
 	}
@@ -96,10 +108,20 @@ func (s *buffer) flushBuffers(stdBuf []string, aggBuf map[Aggregation]map[Aggreg
 		for freq, buf := range freqs {
 			if s.dryRun {
 				s.Logger.Println("Dry aggregated metric:", buf, agg, freq)
-			} else {
-				s.Sender.SendAggregated(strings.NewReader(strings.Join(buf, "\n")), agg, freq)
+				continue
+			}
+
+			err := s.Sender.SendAggregated(strings.NewReader(strings.Join(buf, "\n")), agg, freq)
+			if err != nil {
+				s.Logger.Println("Failed to send aggregated metrics", err)
+				flushErr = flushErr.appendErr(err)
 			}
 		}
 	}
 
+	if flushErr.hasErrors() {
+		return flushErr
+	}
+
+	return nil
 }
