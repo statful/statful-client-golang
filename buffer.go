@@ -9,6 +9,7 @@ type buffer struct {
 	metricCount int
 	flushSize   int
 	dryRun      bool
+	autoFlush   bool
 
 	mu sync.Mutex
 

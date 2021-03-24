@@ -25,6 +25,7 @@ type Client struct {
 }
 
 type Configuration struct {
+	AutoFlush     bool
 	DryRun        bool
 	Tags          Tags
 	FlushSize     int
@@ -40,6 +41,7 @@ func New(cfg Configuration) *Client {
 			metricCount: 0,
 			flushSize:   cfg.FlushSize,
 			dryRun:      cfg.DryRun,
+			autoFlush:   cfg.AutoFlush,
 			mu:          sync.Mutex{},
 			stdBuf:      make([]string, 0, cfg.FlushSize),
 			aggBuf:      make(map[Aggregation]map[AggregationFrequency][]string),
@@ -49,7 +51,7 @@ func New(cfg Configuration) *Client {
 		globalTags: cfg.Tags,
 	}
 
-	if cfg.FlushInterval > 0 {
+	if cfg.FlushInterval > 0 || cfg.AutoFlush {
 		statful.StartFlushInterval(cfg.FlushInterval)
 	}
 
