@@ -51,22 +51,29 @@ func New(cfg Configuration) *Client {
 		globalTags: cfg.Tags,
 	}
 
-	if cfg.FlushInterval > 0 || cfg.AutoFlush {
+	if cfg.FlushInterval > 0 && cfg.AutoFlush {
 		statful.StartFlushInterval(cfg.FlushInterval)
 	}
 
 	return statful
 }
 
-// Starts a go routine that periodically flushes the metrics of MetricsSender
+// Starts a go routine that periodically flushes the metrics from buffer
+// If AutoFlush is deactivated it just send metrics synchronously.
 // Returns a function that stops the timer.
 func (c *Client) StartFlushInterval(interval time.Duration) {
+	if !c.buffer.autoFlush {
+		c.sendSynchronously()
+		return
+	}
+
 	if interval < MinFlushInterval {
 		interval = MinFlushInterval
 	}
 
 	c.ticker = time.NewTicker(interval)
 	c.tickerDone = make(chan bool)
+
 	go func() {
 		for {
 			select {
@@ -79,9 +86,15 @@ func (c *Client) StartFlushInterval(interval time.Duration) {
 	}()
 }
 
+func (c *Client) sendSynchronously() {
+	c.buffer.Flush()
+}
+
 func (c *Client) StopFlushInterval() {
-	c.ticker.Stop()
-	c.tickerDone <- true
+	if c.buffer.autoFlush {
+		c.ticker.Stop()
+		c.tickerDone <- true
+	}
 }
 
 func (c *Client) Counter(name string, value float64, tags Tags) {

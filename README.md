@@ -119,7 +119,7 @@ Create a simple Metrics Sender that buffers metrics before sending.
 statful.New(
     statful.Configuration{
 
-        AutoFlush: false,
+        AutoFlush: true,
         DryRun: false,
         FlushInterval: 50,
         FlushSize: 1000,
