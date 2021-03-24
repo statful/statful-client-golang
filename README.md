@@ -91,20 +91,24 @@ statful.Statful{
 Create a simple HTTP API configuration for the client.
 
 ```golang
-statful.Statful{
-    Sender: &statful.BufferedMetricsSender{
-        Client: &statful.ApiClient{
+statful.New(
+    statful.Configuration{
+
+        AutoFlush: false,
+        DryRun: false,
+        FlushInterval: 50,
+        FlushSize: 1000,
+
+        Sender: &statful.HttpSender{
             Http:     &http.Client{},
-            Url:      "https://api.statful.com",
-            BasePath: "/tel/v2.0/",
+            Url:      "https://api.statful.com/tel/v2.0/",
             Token:    "12345678-09ab-cdef-1234-567890abcdef",
         },
-        FlushSize: 1000,
-        Buf:       bytes.Buffer{},
-    },
-    GlobalTags: statful.Tags{"client": "golang"},
-    DryRun:     false,
-}
+
+        Logger: log.New(os.Stderr, "", log.LstdFlags),
+        Tags: statful.Tags{"client": "golang"},
+    }
+)
 ```
 
 ### Buffer Configuration
@@ -112,20 +116,24 @@ statful.Statful{
 Create a simple Metrics Sender that buffers metrics before sending.
 
 ```golang
-statful.Statful{
-    Sender: &statful.BufferedMetricsSender{
-        Client: &statful.ApiClient{
+statful.New(
+    statful.Configuration{
+
+        AutoFlush: false,
+        DryRun: false,
+        FlushInterval: 50,
+        FlushSize: 1000,
+
+        Sender: &statful.HttpSender{
             Http:     &http.Client{},
-            Url:      "https://api.statful.com",
-            BasePath: "/tel/v2.0/",
+            Url:      "https://api.statful.com/tel/v2.0/",
             Token:    "12345678-09ab-cdef-1234-567890abcdef",
         },
-        FlushSize: 1000,
-        Buf:       bytes.Buffer{},
-    },
-    GlobalTags: statful.Tags{"client": "golang"},
-    DryRun:     false,
-}
+
+        Logger: log.New(os.Stderr, "", log.LstdFlags),
+        Tags: statful.Tags{"client": "golang"},
+    }
+)
 ```
 
 ## Authors
