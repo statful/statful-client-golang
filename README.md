@@ -26,6 +26,7 @@ Statful client for golang written in go. This client is intended to gather metri
 
 | Statful Client version | Tested golang versions  |
 |:---|:---|
+| 0.13.0 | `1.15` |
 | 0.0.1 | `1.13`, `1.14` |
 
 ## Quick Start
@@ -43,6 +44,7 @@ Below you can find the information on the custom options to set up the configura
 
 | Option | Description | Type | Default | Required |
 |:---|:---|:---|:---|:---|
+| _AutoFlush_ | Defines if metrics are flushed synchronously or automatically in a background thread. | `boolean` | `false` | **NO** |
 | _DryRun_ | Defines if metrics should be output to the logger instead of being sent to Statful (useful for testing/debugging purposes). | `boolean` | `false` | **NO** |
 | _FlushSize_ | Defines the maximum buffer size before performing a flush, in **bytes**. | `number` | `1000` | **NO** |
 | _Globaltags_ | Object for setting the global tags. | `object` | `{}` | **NO** |
