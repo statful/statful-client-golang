@@ -44,7 +44,7 @@ Below you can find the information on the custom options to set up the configura
 
 | Option | Description | Type | Default | Required |
 |:---|:---|:---|:---|:---|
-| _AutoFlush_ | Defines if metrics are flushed synchronously or automatically in a background thread. | `boolean` | `false` | **NO** |
+| _DisableAutoFlush_ | Defines if metrics should be flushed synchronously. ``FlushSize`` and ``FlushInterval`` attributes are disabled and ``Flush()`` or ``FlushError()`` functions should be called instead. | `boolean` | `false` | **NO** |
 | _DryRun_ | Defines if metrics should be output to the logger instead of being sent to Statful (useful for testing/debugging purposes). | `boolean` | `false` | **NO** |
 | _FlushSize_ | Defines the maximum buffer size before performing a flush, in **bytes**. | `number` | `1000` | **NO** |
 | _Globaltags_ | Object for setting the global tags. | `object` | `{}` | **NO** |
@@ -95,11 +95,31 @@ Create a simple HTTP API configuration for the client.
 ```golang
 statful.New(
     statful.Configuration{
-
-        AutoFlush: false,
+        DisableAutoFlush: false,
         DryRun: false,
-        FlushInterval: 50,
         FlushSize: 1000,
+
+        Sender: &statful.HttpSender{
+            Http:     &http.Client{},
+            Url:      "https://api.statful.com/tel/v2.0/",
+            Token:    "12345678-09ab-cdef-1234-567890abcdef",
+        },
+
+        Logger: log.New(os.Stderr, "", log.LstdFlags),
+        Tags: statful.Tags{"client": "golang"},
+    }
+)
+```
+
+#### Disabling Auto Flush
+
+Create an HTTP API configuration that prevents flushing assynchronously.
+
+```golang
+statful.New(
+    statful.Configuration{
+        DisableAutoFlush: true,
+        DryRun: false,
 
         Sender: &statful.HttpSender{
             Http:     &http.Client{},
@@ -120,10 +140,8 @@ Create a simple Metrics Sender that buffers metrics before sending.
 ```golang
 statful.New(
     statful.Configuration{
-
-        AutoFlush: true,
+        DisableAutoFlush: false,
         DryRun: false,
-        FlushInterval: 50,
         FlushSize: 1000,
 
         Sender: &statful.HttpSender{

@@ -6,10 +6,10 @@ import (
 )
 
 type buffer struct {
-	metricCount int
-	flushSize   int
-	dryRun      bool
-	autoFlush   bool
+	metricCount      int
+	flushSize        int
+	dryRun           bool
+	disableAutoFlush bool
 
 	mu sync.Mutex
 

@@ -25,11 +25,11 @@ type Client struct {
 }
 
 type Configuration struct {
-	AutoFlush     bool
-	DryRun        bool
-	Tags          Tags
-	FlushSize     int
-	FlushInterval time.Duration
+	DisableAutoFlush bool
+	DryRun           bool
+	Tags             Tags
+	FlushSize        int
+	FlushInterval    time.Duration
 
 	Logger Logger
 	Sender Sender
@@ -38,20 +38,20 @@ type Configuration struct {
 func New(cfg Configuration) *Client {
 	statful := &Client{
 		buffer: buffer{
-			metricCount: 0,
-			flushSize:   cfg.FlushSize,
-			dryRun:      cfg.DryRun,
-			autoFlush:   cfg.AutoFlush,
-			mu:          sync.Mutex{},
-			stdBuf:      make([]string, 0, cfg.FlushSize),
-			aggBuf:      make(map[Aggregation]map[AggregationFrequency][]string),
-			Sender:      cfg.Sender,
-			Logger:      cfg.Logger,
+			metricCount:      0,
+			flushSize:        cfg.FlushSize,
+			dryRun:           cfg.DryRun,
+			disableAutoFlush: cfg.DisableAutoFlush,
+			mu:               sync.Mutex{},
+			stdBuf:           make([]string, 0, cfg.FlushSize),
+			aggBuf:           make(map[Aggregation]map[AggregationFrequency][]string),
+			Sender:           cfg.Sender,
+			Logger:           cfg.Logger,
 		},
 		globalTags: cfg.Tags,
 	}
 
-	if cfg.FlushInterval > 0 && cfg.AutoFlush {
+	if cfg.FlushInterval > 0 && !cfg.DisableAutoFlush {
 		statful.StartFlushInterval(cfg.FlushInterval)
 	}
 
@@ -62,8 +62,7 @@ func New(cfg Configuration) *Client {
 // If AutoFlush is deactivated it just send metrics synchronously.
 // Returns a function that stops the timer.
 func (c *Client) StartFlushInterval(interval time.Duration) {
-	if !c.buffer.autoFlush {
-		c.sendSynchronously()
+	if c.buffer.disableAutoFlush {
 		return
 	}
 
@@ -86,12 +85,8 @@ func (c *Client) StartFlushInterval(interval time.Duration) {
 	}()
 }
 
-func (c *Client) sendSynchronously() {
-	c.buffer.Flush()
-}
-
 func (c *Client) StopFlushInterval() {
-	if c.buffer.autoFlush {
+	if c.ticker != nil {
 		c.ticker.Stop()
 		c.tickerDone <- true
 	}
