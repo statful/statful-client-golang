@@ -113,7 +113,7 @@ statful.New(
 
 #### Disabling Auto Flush
 
-Create an HTTP API configuration that prevents flushing assynchronously.
+Create an HTTP API configuration that prevents flushing asynchronously.
 
 ```golang
 statful.New(
