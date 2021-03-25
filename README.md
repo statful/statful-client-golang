@@ -111,7 +111,7 @@ statful.New(
 )
 ```
 
-#### Disabling Auto Flush
+### Disabling Auto Flush
 
 Create an HTTP API configuration that prevents flushing asynchronously.
 
