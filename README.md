@@ -139,7 +139,6 @@ Create a simple Metrics Sender that buffers metrics before sending.
 ```golang
 statful.New(
     statful.Configuration{
-        DisableAutoFlush: false,
         DryRun: false,
         FlushSize: 1000,
 
