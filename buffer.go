@@ -6,9 +6,10 @@ import (
 )
 
 type buffer struct {
-	metricCount int
-	flushSize   int
-	dryRun      bool
+	metricCount      int
+	flushSize        int
+	dryRun           bool
+	disableAutoFlush bool
 
 	mu sync.Mutex
 
@@ -25,7 +26,7 @@ func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, agg
 	s.stdBuf = append(s.stdBuf, MetricToString(name, value, tags, timestamp, aggregations, frequency))
 	s.metricCount++
 
-	if s.metricCount >= s.flushSize {
+	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
 		stdBuf, aggBuf := s.drainBuffers()
 		go s.flushBuffers(stdBuf, aggBuf)
 	}
@@ -44,7 +45,7 @@ func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp 
 	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, tags, timestamp, Aggregations{}, 0))
 	s.metricCount++
 
-	if s.metricCount >= s.flushSize {
+	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
 		stdBuf, aggBuf := s.drainBuffers()
 		go s.flushBuffers(stdBuf, aggBuf)
 	}

@@ -25,10 +25,11 @@ type Client struct {
 }
 
 type Configuration struct {
-	DryRun        bool
-	Tags          Tags
-	FlushSize     int
-	FlushInterval time.Duration
+	DisableAutoFlush bool
+	DryRun           bool
+	Tags             Tags
+	FlushSize        int
+	FlushInterval    time.Duration
 
 	Logger Logger
 	Sender Sender
@@ -37,34 +38,41 @@ type Configuration struct {
 func New(cfg Configuration) *Client {
 	statful := &Client{
 		buffer: buffer{
-			metricCount: 0,
-			flushSize:   cfg.FlushSize,
-			dryRun:      cfg.DryRun,
-			mu:          sync.Mutex{},
-			stdBuf:      make([]string, 0, cfg.FlushSize),
-			aggBuf:      make(map[Aggregation]map[AggregationFrequency][]string),
-			Sender:      cfg.Sender,
-			Logger:      cfg.Logger,
+			metricCount:      0,
+			flushSize:        cfg.FlushSize,
+			dryRun:           cfg.DryRun,
+			disableAutoFlush: cfg.DisableAutoFlush,
+			mu:               sync.Mutex{},
+			stdBuf:           make([]string, 0, cfg.FlushSize),
+			aggBuf:           make(map[Aggregation]map[AggregationFrequency][]string),
+			Sender:           cfg.Sender,
+			Logger:           cfg.Logger,
 		},
 		globalTags: cfg.Tags,
 	}
 
-	if cfg.FlushInterval > 0 {
+	if cfg.FlushInterval > 0 && !cfg.DisableAutoFlush {
 		statful.StartFlushInterval(cfg.FlushInterval)
 	}
 
 	return statful
 }
 
-// Starts a go routine that periodically flushes the metrics of MetricsSender
+// Starts a go routine that periodically flushes the metrics from buffer
+// If AutoFlush is deactivated it just send metrics synchronously.
 // Returns a function that stops the timer.
 func (c *Client) StartFlushInterval(interval time.Duration) {
+	if c.buffer.disableAutoFlush {
+		return
+	}
+
 	if interval < MinFlushInterval {
 		interval = MinFlushInterval
 	}
 
 	c.ticker = time.NewTicker(interval)
 	c.tickerDone = make(chan bool)
+
 	go func() {
 		for {
 			select {
@@ -78,8 +86,10 @@ func (c *Client) StartFlushInterval(interval time.Duration) {
 }
 
 func (c *Client) StopFlushInterval() {
-	c.ticker.Stop()
-	c.tickerDone <- true
+	if c.ticker != nil {
+		c.ticker.Stop()
+		c.tickerDone <- true
+	}
 }
 
 func (c *Client) Counter(name string, value float64, tags Tags) {

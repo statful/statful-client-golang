@@ -20,8 +20,8 @@ type Sender interface {
 }
 
 const (
-	ep_metrics            = "/tel/v2.0/metrics"
-	ep_metrics_aggregated = "/tel/v2.0/aggregation/:agg/frequency/:freq"
+	epMetrics           = "/tel/v2.0/metrics"
+	epMetricsAggregated = "/tel/v2.0/aggregation/:agg/frequency/:freq"
 )
 
 type HttpSender struct {
@@ -33,13 +33,13 @@ type HttpSender struct {
 }
 
 func (h *HttpSender) Send(data io.Reader) error {
-	p := h.Url + h.BasePath + ep_metrics
+	p := h.Url + h.BasePath + epMetrics
 
 	return h.do(http.MethodPut, p, data)
 }
 
 func (h *HttpSender) SendAggregated(data io.Reader, agg Aggregation, freq AggregationFrequency) error {
-	p := h.Url + h.BasePath + ep_metrics_aggregated
+	p := h.Url + h.BasePath + epMetricsAggregated
 	p = strings.Replace(p, ":agg", string(agg), -1)
 	p = strings.Replace(p, ":freq", strconv.Itoa(int(freq)), -1)
 
