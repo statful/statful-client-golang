@@ -95,7 +95,6 @@ Create a simple HTTP API configuration for the client.
 ```golang
 statful.New(
     statful.Configuration{
-        DisableAutoFlush: false,
         DryRun: false,
         FlushSize: 1000,
 
