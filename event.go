@@ -2,6 +2,12 @@ package statful
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+)
+
+const (
+	jsonEncoding = "application/json"
 )
 
 type Amount struct {
@@ -27,9 +33,11 @@ type Event struct {
 	Timestamp          int         `json:"timestamp"`
 }
 
-func NewEvent(userId string, gameId string, operatorId string, aggregatorId string, eventType string, amount int, currency string, attributes []Attribute, timestamp int) Event {
+func NewEvent(eventId string, userId string, extUserId string, gameId string, operatorId string, aggregatorId string, eventType string, amount int, currency string, attributes []Attribute, timestamp int) Event {
 	return Event{
+		EventId:      eventId,
 		UserId:       userId,
+		ExtUserId:    extUserId,
 		GameId:       gameId,
 		OperatorId:   operatorId,
 		AggregatorId: aggregatorId,
@@ -52,4 +60,18 @@ func (e *Event) toJson() (string, error) {
 	jsonString := string(bytes[:])
 
 	return jsonString, nil
+}
+
+func (c *Client) Event(event Event) {
+	c.eventBuffer.Event(event)
+}
+
+func (c *Client) FlushEvents() error {
+	return c.eventBuffer.Send()
+}
+
+func (h *HttpSender) SendEvent(data io.Reader) error {
+	url := h.Url + h.BasePath
+
+	return h.do(http.MethodPut, url, jsonEncoding, data)
 }
