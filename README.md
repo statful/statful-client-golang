@@ -166,7 +166,7 @@ statful.New(
 
         EventSender: &statful.HttpSender{
             Http:     &http.Client{},
-            Url:      "https://api.statful.com/insights/event/",
+            Url:      "https://api.statful.com",
             Token:    "12345678-09ab-cdef-1234-567890abcdef",
         },
         EventLogger: log.New(os.Stderr, "", log.LstdFlags),
