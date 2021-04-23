@@ -8,6 +8,7 @@ import (
 
 type eventBuffer struct {
 	buffer     []Event
+	dryRun     bool
 	eventCount int
 	flushSize  int
 	mu         sync.Mutex
@@ -25,20 +26,46 @@ func (e *eventBuffer) Event(event Event) {
 	e.mu.Unlock()
 }
 
-func (e *eventBuffer) Send() error {
+func (e *eventBuffer) Flush() error {
 	e.mu.Lock()
 
-	event, err := json.Marshal(e.buffer)
-	if err != nil {
-		e.mu.Unlock()
-		return err
-	}
-
-	err = e.Sender.SendEvent(bytes.NewBuffer(event))
-	e.buffer = []Event{}
-	e.eventCount = 0
-
+	events := e.drainBuffers()
 	e.mu.Unlock()
 
+	return e.flushBuffers(events)
+}
+
+func (e *eventBuffer) flushBuffers(buffer []Event) error {
+	var err error
+
+	if len(buffer) > 0 {
+		if e.dryRun {
+			for _, event := range buffer {
+				e.Logger.Println("Dry event: ", event)
+			}
+		} else {
+			events, err := json.Marshal(buffer)
+			if err != nil {
+				return err
+			} else {
+				err = e.Sender.SendEvents(bytes.NewBuffer(events))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 	return err
+}
+
+func (e *eventBuffer) drainBuffers() []Event {
+	var events []Event
+
+	if e.eventCount > 0 {
+		events = e.buffer
+		e.buffer = []Event{}
+		e.eventCount = 0
+	}
+
+	return events
 }

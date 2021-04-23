@@ -16,13 +16,14 @@ import (
 
 type Sender interface {
 	Send(data io.Reader) error
-	SendEvent(data io.Reader) error
+	SendEvents(data io.Reader) error
 	SendAggregated(data io.Reader, agg Aggregation, frequency AggregationFrequency) error
 }
 
 const (
 	epMetrics           = "/tel/v2.0/metrics"
 	epMetricsAggregated = "/tel/v2.0/aggregation/:agg/frequency/:freq"
+	jsonEncoding        = "application/json"
 	plainTextEncoding   = "text/plain"
 )
 
@@ -38,6 +39,12 @@ func (h *HttpSender) Send(data io.Reader) error {
 	p := h.Url + h.BasePath + epMetrics
 
 	return h.do(http.MethodPut, p, plainTextEncoding, data)
+}
+
+func (h *HttpSender) SendEvents(data io.Reader) error {
+	url := h.Url + h.BasePath
+
+	return h.do(http.MethodPut, url, jsonEncoding, data)
 }
 
 func (h *HttpSender) SendAggregated(data io.Reader, agg Aggregation, freq AggregationFrequency) error {
@@ -131,6 +138,6 @@ func (u *UdpSender) SendAggregated(io.Reader, Aggregation, AggregationFrequency)
 	return errors.New("UNSUPPORTED_OPERATION")
 }
 
-func (u *UdpSender) SendEvent(io.Reader, Aggregation, AggregationFrequency) error {
+func (u *UdpSender) SendEvents(io.Reader, Aggregation, AggregationFrequency) error {
 	return errors.New("UNSUPPORTED_OPERATION")
 }

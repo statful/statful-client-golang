@@ -55,6 +55,7 @@ func New(cfg Configuration) *Client {
 		eventBuffer: eventBuffer{
 			buffer:     []Event{},
 			eventCount: 0,
+			dryRun:     cfg.DryRun,
 			mu:         sync.Mutex{},
 			Sender:     cfg.EventSender,
 			Logger:     cfg.EventLogger,

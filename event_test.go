@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sync"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ const (
 	testCurrency  = "PT"
 	testEpoch     = 1319010256
 
-	expectedJson = `[{"eventId":"00000000-0000-0000-0000-000000000000","userId":"00000000-0000-0000-0000-000000000000","extUserId":"20","gameId":"00000000-0000-0000-0000-000000000000","operatorId":"00000000-0000-0000-0000-000000000000","aggregatorId":"00000000-0000-0000-0000-000000000000","eventType":"event type test","amount":{"value":5000,"currency":"PT"},"variableAttributes":[],"timestamp":1319010256}]`
+	expectedJson = `[{"eventId":"00000000-0000-0000-0000-000000000000","userId":"00000000-0000-0000-0000-000000000000","extUserId":"20","gameId":"00000000-0000-0000-0000-000000000000","operatorId":"00000000-0000-0000-0000-000000000000","aggregatorId":"00000000-0000-0000-0000-000000000000","publisherId":"00000000-0000-0000-0000-000000000000","eventType":"event type test","amount":{"value":5000,"currency":"PT"},"variableAttributes":[],"timestamp":1319010256}]`
 )
 
 var expectedEvent = Event{
@@ -25,6 +26,7 @@ var expectedEvent = Event{
 	GameId:       defaultUuid,
 	OperatorId:   defaultUuid,
 	AggregatorId: defaultUuid,
+	PublisherId:  defaultUuid,
 	EventType:    testEventType,
 	Amount: Amount{
 		Value:    testAmount,
@@ -36,7 +38,7 @@ var expectedEvent = Event{
 
 func TestNewEvent(t *testing.T) {
 
-	event := NewEvent(defaultUuid, defaultUuid, testExtUserId, defaultUuid, defaultUuid, defaultUuid, testEventType, testAmount, testCurrency, []Attribute{}, testEpoch)
+	event := NewEvent(defaultUuid, defaultUuid, testExtUserId, defaultUuid, defaultUuid, defaultUuid, defaultUuid, testEventType, testAmount, testCurrency, []Attribute{}, testEpoch)
 
 	if event.UserId != expectedEvent.UserId {
 		t.Errorf("Different userId returned: \nExpected: %s \nGot: %s ", expectedEvent.UserId, event.UserId)
@@ -79,7 +81,7 @@ func TestNewEvent(t *testing.T) {
 	}
 }
 
-func (c *ChannelSender) SendEvent(data io.Reader) error {
+func (c *ChannelSender) SendEvents(data io.Reader) error {
 	all, err := ioutil.ReadAll(data)
 	if err != nil {
 		return err
@@ -92,7 +94,10 @@ func TestFlushEventBuffer(t *testing.T) {
 	eventData := make(chan []byte, 1)
 
 	testBuffer := eventBuffer{
-		buffer: []Event{},
+		buffer:     []Event{},
+		dryRun:     false,
+		eventCount: 0,
+		mu:         sync.Mutex{},
 
 		Sender: &ChannelSender{
 			data: eventData,
@@ -104,13 +109,21 @@ func TestFlushEventBuffer(t *testing.T) {
 		t.Errorf("Expected buffer current length error: Expected: %d, Got: %d ", 0, length)
 	}
 
+	if testBuffer.eventCount != 0 {
+		t.Errorf("Expected buffer event count error: Expected: %d, Got: %d ", 0, length)
+	}
+
 	testBuffer.Event(expectedEvent)
 	length = len(testBuffer.buffer)
 	if length != 1 {
 		t.Errorf("Expected buffer current length error: Expected: %d, Got: %d ", 1, length)
 	}
 
-	err := testBuffer.Send()
+	if testBuffer.eventCount != 1 {
+		t.Errorf("Expected buffer event count error: Expected: %d, Got: %d ", 1, length)
+	}
+
+	err := testBuffer.Flush()
 	if err != nil {
 		t.Errorf("Error returned sending event: %s ", err)
 	}
@@ -118,5 +131,9 @@ func TestFlushEventBuffer(t *testing.T) {
 	length = len(testBuffer.buffer)
 	if length != 0 {
 		t.Errorf("Expected buffer current length error: Expected: %d, Got: %d ", 0, length)
+	}
+
+	if testBuffer.eventCount != 0 {
+		t.Errorf("Expected buffer event count error: Expected: %d, Got: %d ", 0, length)
 	}
 }

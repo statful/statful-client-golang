@@ -2,12 +2,6 @@ package statful
 
 import (
 	"encoding/json"
-	"io"
-	"net/http"
-)
-
-const (
-	jsonEncoding = "application/json"
 )
 
 type Amount struct {
@@ -27,13 +21,14 @@ type Event struct {
 	GameId             string      `json:"gameId"`
 	OperatorId         string      `json:"operatorId"`
 	AggregatorId       string      `json:"aggregatorId"`
+	PublisherId        string      `json:"publisherId"`
 	EventType          string      `json:"eventType"`
 	Amount             Amount      `json:"amount"`
 	VariableAttributes []Attribute `json:"variableAttributes"`
 	Timestamp          int         `json:"timestamp"`
 }
 
-func NewEvent(eventId string, userId string, extUserId string, gameId string, operatorId string, aggregatorId string, eventType string, amount int, currency string, attributes []Attribute, timestamp int) Event {
+func NewEvent(eventId string, userId string, extUserId string, gameId string, operatorId string, aggregatorId string, publisherId string, eventType string, amount int, currency string, attributes []Attribute, timestamp int) Event {
 	return Event{
 		EventId:      eventId,
 		UserId:       userId,
@@ -41,6 +36,7 @@ func NewEvent(eventId string, userId string, extUserId string, gameId string, op
 		GameId:       gameId,
 		OperatorId:   operatorId,
 		AggregatorId: aggregatorId,
+		PublisherId:  publisherId,
 		EventType:    eventType,
 		Amount: Amount{
 			Value:    amount,
@@ -49,6 +45,16 @@ func NewEvent(eventId string, userId string, extUserId string, gameId string, op
 		VariableAttributes: attributes,
 		Timestamp:          timestamp,
 	}
+}
+
+// Add an event to event buffer.
+func (c *Client) Event(event Event) {
+	c.eventBuffer.Event(event)
+}
+
+// Send all events in event buffer.
+func (c *Client) FlushEvents() error {
+	return c.eventBuffer.Flush()
 }
 
 func (e *Event) toJson() (string, error) {
@@ -60,18 +66,4 @@ func (e *Event) toJson() (string, error) {
 	jsonString := string(bytes[:])
 
 	return jsonString, nil
-}
-
-func (c *Client) Event(event Event) {
-	c.eventBuffer.Event(event)
-}
-
-func (c *Client) FlushEvents() error {
-	return c.eventBuffer.Send()
-}
-
-func (h *HttpSender) SendEvent(data io.Reader) error {
-	url := h.Url + h.BasePath
-
-	return h.do(http.MethodPut, url, jsonEncoding, data)
 }
