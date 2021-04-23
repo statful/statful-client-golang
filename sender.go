@@ -21,6 +21,7 @@ type Sender interface {
 }
 
 const (
+	epEvents            = "insights/event"
 	epMetrics           = "/tel/v2.0/metrics"
 	epMetricsAggregated = "/tel/v2.0/aggregation/:agg/frequency/:freq"
 	jsonEncoding        = "application/json"
@@ -42,7 +43,7 @@ func (h *HttpSender) Send(data io.Reader) error {
 }
 
 func (h *HttpSender) SendEvents(data io.Reader) error {
-	url := h.Url + h.BasePath
+	url := h.Url + h.BasePath + epEvents
 
 	return h.do(http.MethodPut, url, jsonEncoding, data)
 }
