@@ -6,6 +6,7 @@ import (
 )
 
 // metric[,tag1=value][,tag2=value] value unix_timestamp [aggregation1][,aggregation2][,aggregation_frequency]
+// metric[,tag1=value][,tag2=value] value,user unix_timestamp [aggregation1][,aggregation2][,aggregation_frequency]
 func MetricToString(name string, value float64, user string, tags Tags, timestamp int64, aggregations Aggregations, frequency AggregationFrequency) string {
 	var b strings.Builder
 

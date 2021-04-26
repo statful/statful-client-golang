@@ -43,9 +43,9 @@ func (f fmtLogger) Println(v ...interface{}) {
 func ExampleSimple() {
 	metrics := New(Configuration{
 		FlushSize: 10,
-		Logger: fmtLogger(fmt.Println),
-		Tags:   Tags{"client": "golang"},
-		DryRun: true,
+		Logger:    fmtLogger(fmt.Println),
+		Tags:      Tags{"client": "golang"},
+		DryRun:    true,
 	})
 
 	metrics.Put("test.demo.metric", 100, Tags{}, 0, Aggregations{}, Freq10s)
@@ -104,16 +104,16 @@ func TestStatfulSDK(t *testing.T) {
 	metricsData := make(chan []byte, 1)
 
 	statfulWithoutGlobalTags := New(Configuration{
-		FlushSize:     10,
-		Logger:        log.New(os.Stderr, "", log.LstdFlags),
+		FlushSize: 10,
+		Logger:    log.New(os.Stderr, "", log.LstdFlags),
 		Sender: &ChannelSender{
 			data: metricsData,
 		},
 	})
 
 	statfulWithGlobalTags := New(Configuration{
-		FlushSize:     10,
-		Logger:        log.New(os.Stderr, "", log.LstdFlags),
+		FlushSize: 10,
+		Logger:    log.New(os.Stderr, "", log.LstdFlags),
 		Sender: &ChannelSender{
 			data: metricsData,
 		},
@@ -364,6 +364,66 @@ func TestStatfulSDK(t *testing.T) {
 			totalMetricsSent: 200,
 			metricsSent: []*regexp.Regexp{
 				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+"),
+			},
+		},
+		// user metrics only
+		{
+			description: "3 custom metrics",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.User("potatoes", 1, "user", Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.User("turnips", 10, "user", Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.User("carrots", 100, "user", Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes 1\\.0+,user [0-9]+"),
+				regexp.MustCompile("turnips,foo=bar 10\\.0+,user [0-9]+"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+,user [0-9]+"),
+			},
+		},
+		{
+			description: "3 custom metrics with global tags",
+			statful:     statfulWithGlobalTags,
+			metricsProducer: func(s *Client) {
+				s.User("potatoes", 1, "user", Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.User("turnips", 10, "user", Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.User("carrots", 100, "user", Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Flush()
+			},
+			totalFlushes:     1,
+			totalMetricsSent: 3,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,global=tag 1\\.0+,user [0-9]+"),
+				regexp.MustCompile("turnips(,(global=tag|foo=bar))+ 10\\.0+,user [0-9]+"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+,user [0-9]+"),
+			},
+		},
+		{
+			description: "concurrent custom metrics",
+			statful:     statfulWithoutGlobalTags,
+			metricsProducer: func(s *Client) {
+				wg := sync.WaitGroup{}
+
+				for i := 0; i < 10; i++ {
+					wg.Add(1)
+					go func(metrics *Client, workerId string, wg *sync.WaitGroup) {
+						for i := 0; i < 20; i++ {
+							metrics.User("potatoes", 1, "user", Tags{"worker": workerId}, time.Now().Unix(), Aggregations{}, Freq10s)
+						}
+						wg.Done()
+					}(s, strconv.Itoa(i), &wg)
+				}
+
+				wg.Wait()
+				s.Flush()
+			},
+			totalFlushes:     20,
+			totalMetricsSent: 200,
+			metricsSent: []*regexp.Regexp{
+				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+,user [0-9]+"),
 			},
 		},
 	}
