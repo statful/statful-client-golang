@@ -124,6 +124,10 @@ func (c *Client) PutAggregated(name string, value float64, tags Tags, timestamp 
 	return c.buffer.PutAggregated(name, value, tags.Merge(c.globalTags), timestamp, agg, freq)
 }
 
+func (c *Client) User(name string, value float64, tags Tags, timestamp int64, aggs Aggregations, freq AggregationFrequency) error {
+	return c.buffer.Put(name, value, tags.Merge(c.globalTags), timestamp, aggs, freq)
+}
+
 func (c *Client) Flush() {
 	c.buffer.Flush()
 }

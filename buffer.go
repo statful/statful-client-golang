@@ -23,7 +23,21 @@ type buffer struct {
 func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, aggregations Aggregations, frequency AggregationFrequency) error {
 	// put the metric in the buffer
 	s.mu.Lock()
-	s.stdBuf = append(s.stdBuf, MetricToString(name, value, tags, timestamp, aggregations, frequency))
+	s.stdBuf = append(s.stdBuf, MetricToString(name, value, "", tags, timestamp, aggregations, frequency))
+	s.metricCount++
+
+	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
+		stdBuf, aggBuf := s.drainBuffers()
+		go s.flushBuffers(stdBuf, aggBuf)
+	}
+	s.mu.Unlock()
+
+	return nil
+}
+
+func (s *buffer) User(name string, value float64, user string, tags Tags, timestamp int64, aggregations Aggregations, frequency AggregationFrequency) error {
+	s.mu.Lock()
+	s.stdBuf = append(s.stdBuf, MetricToString(name, value, user, tags, timestamp, aggregations, frequency))
 	s.metricCount++
 
 	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
@@ -42,7 +56,26 @@ func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp 
 		s.aggBuf[aggregation] = make(map[AggregationFrequency][]string)
 	}
 
-	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, tags, timestamp, Aggregations{}, 0))
+	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, "", tags, timestamp, Aggregations{}, 0))
+	s.metricCount++
+
+	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
+		stdBuf, aggBuf := s.drainBuffers()
+		go s.flushBuffers(stdBuf, aggBuf)
+	}
+	s.mu.Unlock()
+
+	return nil
+}
+
+func (s *buffer) UserAggregated(name string, value float64, user string, tags Tags, timestamp int64, aggregation Aggregation, frequency AggregationFrequency) error {
+	// put the metric in the buffer
+	s.mu.Lock()
+	if s.aggBuf[aggregation] == nil {
+		s.aggBuf[aggregation] = make(map[AggregationFrequency][]string)
+	}
+
+	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, user, tags, timestamp, Aggregations{}, 0))
 	s.metricCount++
 
 	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
