@@ -61,7 +61,7 @@ Below you can find the information on the custom options to set up the configura
 - statful.Gauge("myGauge", 1, Tags{"foo "bar"});
 - statful.Timer("myTimer", 1.0, Tags{"foo "bar"});
 - statful.Put("myCustomMetric", 200, Tags{"foo "bar"}, time.Now().Unix(), Aggregations{AggAvg: struct{}{}}, Freq30s);
-- statful.User("myCustomMetric", 200, "userUuid", Tags{"foo "bar"}, time.Now().Unix(), Aggregations{AggAvg: struct{}{}}, Freq30s);
+- statful.PutWithUser("myCustomMetric", 200, "userUuid", Tags{"foo "bar"}, time.Now().Unix(), Aggregations{AggAvg: struct{}{}}, Freq30s);
 ```
 
 The methods for non-aggregated metrics receive a metric name and value as arguments and send a counter, a gauge, a timer or a custom metric.
