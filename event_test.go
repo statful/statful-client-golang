@@ -1,6 +1,7 @@
 package statful
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -136,4 +137,15 @@ func TestFlushEventBuffer(t *testing.T) {
 	if testBuffer.eventCount != 0 {
 		t.Errorf("Expected buffer event count error: Expected: %d, Got: %d ", 0, length)
 	}
+}
+
+func (e *Event) toJson() (string, error) {
+	bytes, err := json.Marshal(e)
+	if err != nil {
+		return "", err
+	}
+
+	jsonString := string(bytes[:])
+
+	return jsonString, nil
 }

@@ -19,25 +19,23 @@ type eventBuffer struct {
 
 func (e *eventBuffer) Event(event Event) {
 	e.mu.Lock()
+	defer e.mu.Unlock()
 
 	e.buffer = append(e.buffer, event)
 	e.eventCount++
 
-	e.mu.Unlock()
 }
 
 func (e *eventBuffer) Flush() error {
 	e.mu.Lock()
+	defer e.mu.Unlock()
 
 	events := e.drainBuffers()
-	e.mu.Unlock()
 
 	return e.flushBuffers(events)
 }
 
 func (e *eventBuffer) flushBuffers(buffer []Event) error {
-	var err error
-
 	if len(buffer) > 0 {
 		if e.dryRun {
 			for _, event := range buffer {
@@ -47,15 +45,14 @@ func (e *eventBuffer) flushBuffers(buffer []Event) error {
 			events, err := json.Marshal(buffer)
 			if err != nil {
 				return err
-			} else {
-				err = e.Sender.SendEvents(bytes.NewBuffer(events))
-				if err != nil {
-					return err
-				}
+			}
+			err = e.Sender.SendEvents(bytes.NewBuffer(events))
+			if err != nil {
+				return err
 			}
 		}
 	}
-	return err
+	return nil
 }
 
 func (e *eventBuffer) drainBuffers() []Event {

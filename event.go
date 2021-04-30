@@ -1,9 +1,5 @@
 package statful
 
-import (
-	"encoding/json"
-)
-
 type Amount struct {
 	Value    int    `json:"value"`
 	Currency string `json:"currency"`
@@ -55,15 +51,4 @@ func (c *Client) Event(event Event) {
 // Send all events in event buffer.
 func (c *Client) FlushEvents() error {
 	return c.eventBuffer.Flush()
-}
-
-func (e *Event) toJson() (string, error) {
-	bytes, err := json.Marshal(e)
-	if err != nil {
-		return "", err
-	}
-
-	jsonString := string(bytes[:])
-
-	return jsonString, nil
 }
