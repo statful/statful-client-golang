@@ -366,14 +366,14 @@ func TestStatfulSDK(t *testing.T) {
 				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+ [0-9]+"),
 			},
 		},
-		// PutWithUser metrics only
+		// Put with user attribute metrics only
 		{
 			description: "3 custom metrics",
 			statful:     statfulWithoutGlobalTags,
 			metricsProducer: func(s *Client) {
-				s.PutWithUser("potatoes", 1, "user", Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
-				s.PutWithUser("turnips", 10, "user", Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
-				s.PutWithUser("carrots", 100, "user", Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Put("potatoes", 1, Tags{}, time.Now().Unix(), Aggregations{}, Freq10s, WithUser("user"))
+				s.Put("turnips", 10, Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s, WithUser("user"))
+				s.Put("carrots", 100, Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s, WithUser("user"))
 				s.Flush()
 			},
 			totalFlushes:     1,
@@ -388,9 +388,9 @@ func TestStatfulSDK(t *testing.T) {
 			description: "3 custom metrics with global tags",
 			statful:     statfulWithGlobalTags,
 			metricsProducer: func(s *Client) {
-				s.PutWithUser("potatoes", 1, "user", Tags{}, time.Now().Unix(), Aggregations{}, Freq10s)
-				s.PutWithUser("turnips", 10, "user", Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s)
-				s.PutWithUser("carrots", 100, "user", Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s)
+				s.Put("potatoes", 1, Tags{}, time.Now().Unix(), Aggregations{}, Freq10s, WithUser("user"))
+				s.Put("turnips", 10, Tags{"foo": "bar"}, time.Now().Unix(), Aggregations{}, Freq10s, WithUser("user"))
+				s.Put("carrots", 100, Tags{"foo": "bar", "global": "tag"}, time.Now().Unix(), Aggregations{}, Freq10s, WithUser("user"))
 				s.Flush()
 			},
 			totalFlushes:     1,
@@ -411,7 +411,7 @@ func TestStatfulSDK(t *testing.T) {
 					wg.Add(1)
 					go func(metrics *Client, workerId string, wg *sync.WaitGroup) {
 						for i := 0; i < 20; i++ {
-							metrics.PutWithUser("potatoes", 1, "user", Tags{"worker": workerId}, time.Now().Unix(), Aggregations{}, Freq10s)
+							metrics.Put("potatoes", 1, Tags{"worker": workerId}, time.Now().Unix(), Aggregations{}, Freq10s, WithUser("user"))
 						}
 						wg.Done()
 					}(s, strconv.Itoa(i), &wg)
