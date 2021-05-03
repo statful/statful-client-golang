@@ -34,9 +34,6 @@ type Configuration struct {
 
 	Logger Logger
 	Sender Sender
-
-	EventLogger Logger
-	EventSender Sender
 }
 
 func New(cfg Configuration) *Client {
@@ -57,8 +54,8 @@ func New(cfg Configuration) *Client {
 			eventCount: 0,
 			dryRun:     cfg.DryRun,
 			mu:         sync.Mutex{},
-			Sender:     cfg.EventSender,
-			Logger:     cfg.EventLogger,
+			Sender:     cfg.Sender,
+			Logger:     cfg.Logger,
 		},
 		globalTags: cfg.Tags,
 	}

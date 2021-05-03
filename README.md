@@ -164,12 +164,12 @@ statful.New(
     statful.Configuration{
         DryRun: false,
 
-        EventSender: &statful.HttpSender{
+        Sender: &statful.HttpSender{
             Http:     &http.Client{},
             Url:      "https://api.statful.com",
             Token:    "12345678-09ab-cdef-1234-567890abcdef",
         },
-        EventLogger: log.New(os.Stderr, "", log.LstdFlags),
+        Logger: log.New(os.Stderr, "", log.LstdFlags),
     }
 )
 ```
