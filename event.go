@@ -24,25 +24,6 @@ type Event struct {
 	Timestamp          int         `json:"timestamp"`
 }
 
-func NewEvent(eventId string, userId string, extUserId string, gameId string, operatorId string, aggregatorId string, publisherId string, eventType string, amount int, currency string, attributes []Attribute, timestamp int) Event {
-	return Event{
-		EventId:      eventId,
-		UserId:       userId,
-		ExtUserId:    extUserId,
-		GameId:       gameId,
-		OperatorId:   operatorId,
-		AggregatorId: aggregatorId,
-		PublisherId:  publisherId,
-		EventType:    eventType,
-		Amount: Amount{
-			Value:    amount,
-			Currency: currency,
-		},
-		VariableAttributes: attributes,
-		Timestamp:          timestamp,
-	}
-}
-
 // Add an event to event buffer.
 func (c *Client) Event(event Event) {
 	c.eventBuffer.Event(event)
