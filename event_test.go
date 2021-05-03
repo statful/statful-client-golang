@@ -2,7 +2,6 @@ package statful
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
@@ -35,51 +34,6 @@ var expectedEvent = Event{
 	},
 	VariableAttributes: []Attribute{},
 	Timestamp:          testEpoch,
-}
-
-func TestNewEvent(t *testing.T) {
-
-	event := NewEvent(defaultUuid, defaultUuid, testExtUserId, defaultUuid, defaultUuid, defaultUuid, defaultUuid, testEventType, testAmount, testCurrency, []Attribute{}, testEpoch)
-
-	if event.UserId != expectedEvent.UserId {
-		t.Errorf("Different userId returned: \nExpected: %s \nGot: %s ", expectedEvent.UserId, event.UserId)
-	}
-
-	if event.GameId != expectedEvent.GameId {
-		t.Errorf("Different gameId returned: \nExpected: %s \nGot: %s ", expectedEvent.GameId, event.GameId)
-	}
-
-	if event.OperatorId != expectedEvent.OperatorId {
-		t.Errorf("Different operatorId returned: \nExpected: %s \nGot: %s ", expectedEvent.OperatorId, event.OperatorId)
-	}
-
-	if event.AggregatorId != expectedEvent.AggregatorId {
-		t.Errorf("Different aggregatorId returned: \nExpected: %s \nGot: %s ", expectedEvent.AggregatorId, event.AggregatorId)
-	}
-
-	if event.EventType != expectedEvent.EventType {
-		t.Errorf("Different eventType returned: \nExpected: %s \nGot: %s ", expectedEvent.EventType, event.EventType)
-	}
-
-	if event.Amount != expectedEvent.Amount {
-		t.Errorf("Different amount returned: \nExpected: %q \nGot: %q ", expectedEvent.Amount, event.Amount)
-	}
-
-	if event.Timestamp != expectedEvent.Timestamp {
-		t.Errorf("Different timestamp returned: \nExpected: %d \nGot: %d ", expectedEvent.Timestamp, event.Timestamp)
-	}
-
-	jsonString, err := event.toJson()
-
-	if err != nil {
-		t.Errorf("Error returned while parsing to Json: %s ", err)
-	}
-
-	jsonString = fmt.Sprintf("[%s]", jsonString)
-
-	if expectedJson != jsonString {
-		t.Errorf("Wrong jsonString returned: \nExpected: %s \nGot: %s ", expectedJson, jsonString)
-	}
 }
 
 func (c *ChannelSender) SendEvents(data io.Reader) error {
