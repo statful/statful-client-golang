@@ -154,6 +154,26 @@ statful.New(
 )
 ```
 
+
+### Event Sender Configuration
+
+To send event payload (JSON) you may configure event sender in your client.
+
+```golang
+statful.New(
+    statful.Configuration{
+        DryRun: false,
+
+        Sender: &statful.HttpSender{
+            Http:     &http.Client{},
+            Url:      "https://api.statful.com",
+            Token:    "12345678-09ab-cdef-1234-567890abcdef",
+        },
+        Logger: log.New(os.Stderr, "", log.LstdFlags),
+    }
+)
+```
+
 ## Authors
 
 [Statful](https://github.com/Statful)

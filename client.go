@@ -16,7 +16,8 @@ var (
 )
 
 type Client struct {
-	buffer buffer
+	buffer      buffer
+	eventBuffer eventBuffer
 
 	ticker     *time.Ticker
 	tickerDone chan bool
@@ -47,6 +48,14 @@ func New(cfg Configuration) *Client {
 			aggBuf:           make(map[Aggregation]map[AggregationFrequency][]string),
 			Sender:           cfg.Sender,
 			Logger:           cfg.Logger,
+		},
+		eventBuffer: eventBuffer{
+			buffer:     []Event{},
+			eventCount: 0,
+			dryRun:     cfg.DryRun,
+			mu:         sync.Mutex{},
+			Sender:     cfg.Sender,
+			Logger:     cfg.Logger,
 		},
 		globalTags: cfg.Tags,
 	}
