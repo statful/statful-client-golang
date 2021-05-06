@@ -117,15 +117,11 @@ func (c *Client) TimerAggregated(name string, value float64, tags Tags, aggregat
 }
 
 func (c *Client) Put(name string, value float64, tags Tags, timestamp int64, aggs Aggregations, freq AggregationFrequency, opts ...PutOption) error {
-	if len(opts) > 0 {
-		return c.buffer.Put(name, value, tags.Merge(c.globalTags), timestamp, aggs, freq, opts[0])
-	}
-
-	return c.buffer.Put(name, value, tags.Merge(c.globalTags), timestamp, aggs, freq)
+	return c.buffer.Put(name, value, tags.Merge(c.globalTags), timestamp, aggs, freq, opts...)
 }
 
-func (c *Client) PutAggregated(name string, value float64, tags Tags, timestamp int64, agg Aggregation, freq AggregationFrequency) error {
-	return c.buffer.PutAggregated(name, value, tags.Merge(c.globalTags), timestamp, agg, freq)
+func (c *Client) PutAggregated(name string, value float64, tags Tags, timestamp int64, agg Aggregation, freq AggregationFrequency, opts ...PutOption) error {
+	return c.buffer.PutAggregated(name, value, tags.Merge(c.globalTags), timestamp, agg, freq, opts...)
 }
 
 func (c *Client) Flush() {
