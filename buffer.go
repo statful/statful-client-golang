@@ -20,10 +20,13 @@ type buffer struct {
 	Logger Logger
 }
 
-func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, aggregations Aggregations, frequency AggregationFrequency) error {
+func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, aggregations Aggregations, frequency AggregationFrequency, opts ...PutOption) error {
 	// put the metric in the buffer
 	s.mu.Lock()
-	s.stdBuf = append(s.stdBuf, MetricToString(name, value, tags, timestamp, aggregations, frequency))
+
+	p := newPutOptions(opts)
+
+	s.stdBuf = append(s.stdBuf, MetricToString(name, value, p.user, tags, timestamp, aggregations, frequency))
 	s.metricCount++
 
 	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
@@ -35,14 +38,17 @@ func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, agg
 	return nil
 }
 
-func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp int64, aggregation Aggregation, frequency AggregationFrequency) error {
+func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp int64, aggregation Aggregation, frequency AggregationFrequency, opts ...PutOption) error {
 	// put the metric in the buffer
 	s.mu.Lock()
+
+	p := newPutOptions(opts)
+
 	if s.aggBuf[aggregation] == nil {
 		s.aggBuf[aggregation] = make(map[AggregationFrequency][]string)
 	}
 
-	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, tags, timestamp, Aggregations{}, 0))
+	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, p.user, tags, timestamp, Aggregations{}, 0))
 	s.metricCount++
 
 	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
