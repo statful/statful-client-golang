@@ -1,19 +1,14 @@
 package statful
 
-type put struct {
-	User string
+type putOptions struct {
+	user string
 }
 
-type PutOption func(*put)
+type PutOption func(*putOptions)
 
-func NewPut(opts []PutOption) *put {
+func NewPut(opts []PutOption) *putOptions {
 
-	const defaultUser = ""
-
-	p := &put{
-		User: defaultUser,
-	}
-
+	p := &putOptions{}
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -22,7 +17,7 @@ func NewPut(opts []PutOption) *put {
 }
 
 func WithUser(user string) PutOption {
-	return func(p *put) {
-		p.User = user
+	return func(p *putOptions) {
+		p.user = user
 	}
 }

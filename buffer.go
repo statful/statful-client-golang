@@ -26,7 +26,7 @@ func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, agg
 
 	p := NewPut(opts)
 
-	s.stdBuf = append(s.stdBuf, MetricToString(name, value, p.User, tags, timestamp, aggregations, frequency))
+	s.stdBuf = append(s.stdBuf, MetricToString(name, value, p.user, tags, timestamp, aggregations, frequency))
 	s.metricCount++
 
 	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
@@ -48,7 +48,7 @@ func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp 
 		s.aggBuf[aggregation] = make(map[AggregationFrequency][]string)
 	}
 
-	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, p.User, tags, timestamp, Aggregations{}, 0))
+	s.aggBuf[aggregation][frequency] = append(s.aggBuf[aggregation][frequency], MetricToString(name, value, p.user, tags, timestamp, Aggregations{}, 0))
 	s.metricCount++
 
 	if !s.disableAutoFlush && s.metricCount >= s.flushSize {
