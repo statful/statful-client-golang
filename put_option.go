@@ -6,7 +6,7 @@ type putOptions struct {
 
 type PutOption func(*putOptions)
 
-func NewPut(opts []PutOption) *putOptions {
+func newPutOptions(opts []PutOption) *putOptions {
 
 	p := &putOptions{}
 	for _, opt := range opts {

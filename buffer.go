@@ -24,7 +24,7 @@ func (s *buffer) Put(name string, value float64, tags Tags, timestamp int64, agg
 	// put the metric in the buffer
 	s.mu.Lock()
 
-	p := NewPut(opts)
+	p := newPutOptions(opts)
 
 	s.stdBuf = append(s.stdBuf, MetricToString(name, value, p.user, tags, timestamp, aggregations, frequency))
 	s.metricCount++
@@ -42,7 +42,7 @@ func (s *buffer) PutAggregated(name string, value float64, tags Tags, timestamp 
 	// put the metric in the buffer
 	s.mu.Lock()
 
-	p := NewPut(opts)
+	p := newPutOptions(opts)
 
 	if s.aggBuf[aggregation] == nil {
 		s.aggBuf[aggregation] = make(map[AggregationFrequency][]string)
