@@ -28,9 +28,10 @@ func (e *eventBuffer) Event(event Event) {
 
 func (e *eventBuffer) Flush() error {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	events := e.drainBuffers()
+
+	e.mu.Unlock()
 
 	return e.flushBuffers(events)
 }
