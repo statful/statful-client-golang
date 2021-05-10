@@ -379,9 +379,9 @@ func TestStatfulSDK(t *testing.T) {
 			totalFlushes:     1,
 			totalMetricsSent: 3,
 			metricsSent: []*regexp.Regexp{
-				regexp.MustCompile("potatoes 1\\.0+,user [0-9]+"),
-				regexp.MustCompile("turnips,foo=bar 10\\.0+,user [0-9]+"),
-				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+,user [0-9]+"),
+				regexp.MustCompile("potatoes value=1\\.0+,user_id=user [0-9]+"),
+				regexp.MustCompile("turnips,foo=bar value=10\\.0+,user_id=user [0-9]+"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ value=100\\.0+,user_id=user [0-9]+"),
 			},
 		},
 		{
@@ -396,9 +396,9 @@ func TestStatfulSDK(t *testing.T) {
 			totalFlushes:     1,
 			totalMetricsSent: 3,
 			metricsSent: []*regexp.Regexp{
-				regexp.MustCompile("potatoes,global=tag 1\\.0+,user [0-9]+"),
-				regexp.MustCompile("turnips(,(global=tag|foo=bar))+ 10\\.0+,user [0-9]+"),
-				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ 100\\.0+,user [0-9]+"),
+				regexp.MustCompile("potatoes,global=tag value=1\\.0+,user_id=user [0-9]+"),
+				regexp.MustCompile("turnips(,(global=tag|foo=bar))+ value=10\\.0+,user_id=user [0-9]+"),
+				regexp.MustCompile("carrots(,(global=tag|foo=bar))+ value=100\\.0+,user_id=user [0-9]+"),
 			},
 		},
 		{
@@ -423,7 +423,7 @@ func TestStatfulSDK(t *testing.T) {
 			totalFlushes:     20,
 			totalMetricsSent: 200,
 			metricsSent: []*regexp.Regexp{
-				regexp.MustCompile("potatoes,worker=\\d+ 1\\.?[0-9]+,user [0-9]+"),
+				regexp.MustCompile("potatoes,worker=\\d+ value=1\\.?[0-9]+,user_id=user [0-9]+"),
 			},
 		},
 	}
