@@ -16,7 +16,8 @@ var (
 )
 
 type Client struct {
-	buffer buffer
+	buffer      buffer
+	eventBuffer eventBuffer
 
 	ticker     *time.Ticker
 	tickerDone chan bool
@@ -47,6 +48,14 @@ func New(cfg Configuration) *Client {
 			aggBuf:           make(map[Aggregation]map[AggregationFrequency][]string),
 			Sender:           cfg.Sender,
 			Logger:           cfg.Logger,
+		},
+		eventBuffer: eventBuffer{
+			buffer:     []Event{},
+			eventCount: 0,
+			dryRun:     cfg.DryRun,
+			mu:         sync.Mutex{},
+			Sender:     cfg.Sender,
+			Logger:     cfg.Logger,
 		},
 		globalTags: cfg.Tags,
 	}
@@ -116,12 +125,12 @@ func (c *Client) TimerAggregated(name string, value float64, tags Tags, aggregat
 	c.PutAggregated(name, value, tags, time.Now().Unix(), aggregation, frequency)
 }
 
-func (c *Client) Put(name string, value float64, tags Tags, timestamp int64, aggs Aggregations, freq AggregationFrequency) error {
-	return c.buffer.Put(name, value, tags.Merge(c.globalTags), timestamp, aggs, freq)
+func (c *Client) Put(name string, value float64, tags Tags, timestamp int64, aggs Aggregations, freq AggregationFrequency, opts ...PutOption) error {
+	return c.buffer.Put(name, value, tags.Merge(c.globalTags), timestamp, aggs, freq, opts...)
 }
 
-func (c *Client) PutAggregated(name string, value float64, tags Tags, timestamp int64, agg Aggregation, freq AggregationFrequency) error {
-	return c.buffer.PutAggregated(name, value, tags.Merge(c.globalTags), timestamp, agg, freq)
+func (c *Client) PutAggregated(name string, value float64, tags Tags, timestamp int64, agg Aggregation, freq AggregationFrequency, opts ...PutOption) error {
+	return c.buffer.PutAggregated(name, value, tags.Merge(c.globalTags), timestamp, agg, freq, opts...)
 }
 
 func (c *Client) Flush() {
