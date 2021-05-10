@@ -21,7 +21,7 @@ func MetricToString(name string, value float64, user string, tags Tags, timestam
 		// value and timestamp
 		fmt.Fprintf(&b, " %f %d", value, timestamp)
 	} else {
-		fmt.Fprintf(&b, " %f,%s %d", value, user, timestamp)
+		fmt.Fprintf(&b, " value=%f,user_id=%s %d", value, user, timestamp)
 	}
 	// aggregations
 	if len(aggregations) > 0 {
