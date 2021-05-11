@@ -21,7 +21,7 @@ type Sender interface {
 }
 
 const (
-	epEvents            = "insights/event"
+	epEvents            = "/insights/event"
 	epMetrics           = "/tel/v2.0/metrics"
 	epMetricsAggregated = "/tel/v2.0/aggregation/:agg/frequency/:freq"
 	jsonEncoding        = "application/json"
