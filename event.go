@@ -6,8 +6,8 @@ type Amount struct {
 }
 
 type Attribute struct {
-	Attribute string `json:"attribute"`
-	Value     string `json:"value"`
+	Attribute string      `json:"attribute"`
+	Value     interface{} `json:"value"`
 }
 
 type Event struct {
