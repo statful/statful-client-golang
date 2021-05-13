@@ -59,7 +59,7 @@ func (h *HttpSender) SendAggregated(data io.Reader, agg Aggregation, freq Aggreg
 func (h *HttpSender) do(method string, url string, contentType string, data io.Reader) error {
 	headers := http.Header{}
 
-	if !h.NoCompression {
+	if !h.NoCompression && contentType != jsonEncoding {
 		compressed, err := gzipData(data)
 		if err != nil {
 			return err
